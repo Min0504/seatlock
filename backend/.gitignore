@@ -1,0 +1,14 @@
+.gradle/
+build/
+out/
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+
+### OS ###
+.DS_Store
+
+### 로컬 환경 ###
+.env
