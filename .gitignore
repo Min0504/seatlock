@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# build output
+dist/
+build/
+out/
+*.tsbuildinfo
+
+# java / gradle
+backend/build/
+backend/.gradle/
+backend/out/
+*.class
+
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# logs
+logs/
+*.log
+npm-debug.log*
+
+# test artifacts
+coverage/
+.nyc_output/
+backend/build/reports/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# prisma
+backend-nest/prisma/*.db
