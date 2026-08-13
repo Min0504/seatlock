@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: seatlock
+
+  datasource:
+    # backend-nest의 dev compose(postgres:55432)를 공유하되 데이터베이스는 분리한다.
+    # 두 구현이 같은 스키마 정의를 쓰지만, Prisma와 Flyway가 한 DB의 이력을
+    # 동시에 소유할 수는 없기 때문 (스키마 원본은 Prisma — V1__baseline.sql 주석 참조)
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:55432/seatlock_spring}
+    username: ${DATABASE_USERNAME:seatlock}
+    password: ${DATABASE_PASSWORD:seatlock}
+
+  jpa:
+    hibernate:
+      # 스키마 변경 권한은 Flyway에만 있다. validate는 "엔티티 매핑이 실제 스키마와
+      # 다르면 부팅 실패" — 매핑 오류를 런타임 쿼리가 아니라 시작 시점에 잡는다.
+      ddl-auto: validate
+    open-in-view: false # OSIV는 커넥션을 뷰 렌더링까지 붙잡는다 — API 서버에선 끈다
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100 # 컬렉션 지연 로딩 N+1을 IN 배치로 완화
+
+  flyway:
+    enabled: true
+
+jwt:
+  # Nest 구현과 동일한 계약: HS256, access 15분 / refresh 14일 (기획서 §4)
+  access-secret: ${JWT_ACCESS_SECRET}
+  refresh-secret: ${JWT_REFRESH_SECRET}
+  access-ttl-sec: ${JWT_ACCESS_TTL_SEC:900}
+  refresh-ttl-sec: ${JWT_REFRESH_TTL_SEC:1209600}
+
+springdoc:
+  swagger-ui:
+    path: /docs # Nest의 Swagger 경로와 동일하게 맞춘다
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:info} # 개발 중 debug로 올려 실행 SQL 확인
