@@ -1,10 +1,12 @@
 package com.seatlock.show;
 
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -31,6 +33,26 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
              WHERE ss.id IN :ids AND ss.showId = :showId
             """)
     List<ShowSeat> findAllWithSeat(@Param("ids") Collection<Long> ids, @Param("showId") Long showId);
+
+    /**
+     * [실험 브랜치 전용] 비관적 락 선점 — SELECT ... FOR UPDATE로 행을 먼저 잠근다.
+     *
+     * ORDER BY ss.id가 핵심이다: 두 요청이 [12, 7]과 [7, 12]처럼 좌석을 다른 순서로
+     * 요청해도 잠금은 항상 id 오름차순으로 획득된다. 순서가 제각각이면 A가 7을 쥐고
+     * 12를 기다리는 동안 B가 12를 쥐고 7을 기다리는 교착(deadlock)이 생긴다 —
+     * "잠금 순서 통일"이 다중 행 FOR UPDATE의 교착 예방 표준 기법이다.
+     *
+     * fetch join을 하지 않는 이유: FOR UPDATE는 잠글 행이 명확해야 하는데 조인이
+     * 붙으면 PG가 조인된 테이블(seats)까지 잠근다. 응답용 좌석 정보는 잠금 밖에서
+     * findAllWithSeat로 따로 읽는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT ss FROM ShowSeat ss
+             WHERE ss.id IN :ids AND ss.showId = :showId
+             ORDER BY ss.id
+            """)
+    List<ShowSeat> findAllForUpdate(@Param("ids") Collection<Long> ids, @Param("showId") Long showId);
 
     /**
      * 1인 보유 상한 검사용 — 아직 유효한 HELD만 센다 (만료분은 곧 회수될 좌석).

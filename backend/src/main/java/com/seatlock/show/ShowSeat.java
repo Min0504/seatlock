@@ -80,4 +80,22 @@ public class ShowSeat {
                 && !holdExpiresAt.isAfter(now);
         return expiredHold ? SeatStatus.AVAILABLE : status;
     }
+
+    /** [실험 브랜치 전용] 이 좌석을 지금 선점할 수 있는가 — 빈 좌석 또는 만료된 선점 */
+    public boolean holdable(Instant now) {
+        return status == SeatStatus.AVAILABLE
+                || (status == SeatStatus.HELD && holdExpiresAt != null && !holdExpiresAt.isAfter(now));
+    }
+
+    /**
+     * [실험 브랜치 전용] 엔티티 변경 감지(dirty checking) 경로의 선점 상태 전이.
+     * 본선(조건부 UPDATE)은 엔티티를 만들지 않으므로 이 메서드가 없다 — 비관적 락
+     * 실험은 "행 잠금 후 읽고-검사하고-쓰는" 고전적 흐름을 재현하는 것이 목적이다.
+     */
+    public void applyHold(long userId, UUID groupId, Instant expiresAt) {
+        this.status = SeatStatus.HELD;
+        this.holdUserId = userId;
+        this.holdGroupId = groupId;
+        this.holdExpiresAt = expiresAt;
+    }
 }
