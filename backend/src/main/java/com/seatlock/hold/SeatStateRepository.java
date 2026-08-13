@@ -76,6 +76,29 @@ public class SeatStateRepository {
     }
 
     /**
+     * 결제 승인 확정 — HELD→RESERVED 전이 (기획서 §7 문제 3의 최종 판정).
+     *
+     * WHERE가 곧 선점 만료 재검증이다: 스위퍼가 회수했거나 다른 사용자가 넘겨받았으면
+     * 갱신 0건으로 드러나고, 호출자는 좌석 수 불일치로 전체를 롤백한다.
+     * "결제 전 검사(assertHoldAlive)"는 UX용 사전 필터일 뿐 — 검사와 확정 사이의
+     * 시간차를 이 조건부 UPDATE가 원자적으로 닫는다.
+     */
+    public List<Long> confirmByGroup(UUID holdGroupId, long userId) {
+        return jdbc.queryForList("""
+                UPDATE show_seats
+                   SET status = 'RESERVED', hold_user_id = NULL,
+                       hold_group_id = NULL, hold_expires_at = NULL
+                 WHERE hold_group_id = :groupId AND hold_user_id = :userId
+                   AND status = 'HELD' AND hold_expires_at > now()
+                 RETURNING id
+                """,
+                new MapSqlParameterSource()
+                        .addValue("groupId", holdGroupId)
+                        .addValue("userId", userId),
+                Long.class);
+    }
+
+    /**
      * 만료 선점 일괄 회수 (스위퍼용). 멱등이라 서버 여러 대가 동시에 돌려도 안전하다 —
      * 두 번째 실행은 0건 갱신. WHERE는 부분 인덱스(show_seats_expired_hold_scan_idx,
      * status='HELD'인 행만 수록)를 탄다.

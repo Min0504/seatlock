@@ -4,6 +4,7 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
  * 낭비하므로 static 초기화 블록에서 직접 start()한다(Ryuk이 JVM 종료 시 정리).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(TestBeans.class)
 public abstract class IntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -69,6 +71,18 @@ public abstract class IntegrationTest {
     /** supertest의 request().post().send()에 대응하는 얇은 헬퍼 — 응답은 Map으로 받아 단언한다 */
     protected ResponseEntity<Map<String, Object>> post(String path, Object body, String token) {
         return rest.exchange(path, HttpMethod.POST, entity(body, token), JSON_MAP);
+    }
+
+    /** Idempotency-Key처럼 추가 헤더가 필요한 요청용 */
+    protected ResponseEntity<Map<String, Object>> post(
+            String path, Object body, String token, Map<String, String> extraHeaders) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (token != null) {
+            headers.setBearerAuth(token);
+        }
+        extraHeaders.forEach(headers::set);
+        return rest.exchange(path, HttpMethod.POST, new HttpEntity<>(body, headers), JSON_MAP);
     }
 
     protected ResponseEntity<Map<String, Object>> get(String path, String token, Object... uriVars) {

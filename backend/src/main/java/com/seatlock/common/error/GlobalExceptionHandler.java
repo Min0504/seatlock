@@ -2,6 +2,7 @@ package com.seatlock.common.error;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -35,6 +36,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return ResponseEntity.status(400)
                 .body(ErrorResponse.of(ErrorCode.VALIDATION_FAILED, "요청 값의 형식이 올바르지 않습니다: " + e.getName()));
+    }
+
+    /** 역직렬화 불가 바디(잘못된 enum 값, 깨진 JSON 등) — Nest ValidationPipe의 400과 동일 계약 */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
+        return ResponseEntity.status(400)
+                .body(ErrorResponse.of(ErrorCode.VALIDATION_FAILED, "요청 본문을 해석할 수 없습니다."));
     }
 
     @ExceptionHandler(Exception.class)

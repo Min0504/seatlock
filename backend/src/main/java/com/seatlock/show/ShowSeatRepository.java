@@ -56,6 +56,23 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
 
     List<ShowSeat> findByHoldGroupIdAndHoldUserIdAndStatus(UUID holdGroupId, Long holdUserId, SeatStatus status);
 
+    /** 결제 전 선점 생존 검사용 — 그룹의 미만료 HELD 좌석 수 (최종 판정은 confirmByGroup) */
+    @Query("""
+            SELECT count(ss) FROM ShowSeat ss
+             WHERE ss.holdGroupId = :groupId AND ss.holdUserId = :userId
+               AND ss.status = :status
+               AND ss.holdExpiresAt > :now
+            """)
+    long countByGroupAliveHolds(
+            @Param("groupId") UUID holdGroupId,
+            @Param("userId") Long userId,
+            @Param("status") SeatStatus status,
+            @Param("now") Instant now);
+
+    default long countAliveInGroup(UUID holdGroupId, Long userId, Instant now) {
+        return countByGroupAliveHolds(holdGroupId, userId, SeatStatus.HELD, now);
+    }
+
     /** PENDING 예매의 좌석 표시용 — 선점 그룹 일괄 조회 (행마다 조회하면 N+1) */
     @Query("""
             SELECT ss FROM ShowSeat ss
