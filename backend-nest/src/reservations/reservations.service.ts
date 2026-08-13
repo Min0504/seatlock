@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ReservationStatus, SeatStatus } from '@prisma/client';
 import { Errors } from '../common/errors/errors';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { RedisService } from '../common/redis/redis.service';
+import { holdKey } from '../holds/hold-keys';
 import { MyReservationsQuery } from './dto/reservations.dto';
 
 export interface ReservationSummary {
@@ -15,7 +17,10 @@ export interface ReservationSummary {
 
 @Injectable()
 export class ReservationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {}
 
   /**
    * 선점 좌석을 예매로 확정한다.
@@ -23,7 +28,7 @@ export class ReservationsService {
    * v2에서 mock PG 결제가 도입되면 PENDING 생성 → 결제 승인 시 CONFIRMED로 분리된다.
    */
   async create(userId: bigint, holdGroupId: string): Promise<{ id: bigint; totalPrice: number }> {
-    return this.prisma.$transaction(async (tx) => {
+    const created = await this.prisma.$transaction(async (tx) => {
       const seats = await tx.showSeat.findMany({
         where: { holdGroupId, holdUserId: userId, status: SeatStatus.HELD },
       });
@@ -49,8 +54,8 @@ export class ReservationsService {
       await tx.reservationSeat.createMany({
         data: seats.map((s) => ({ reservationId: reservation.id, showSeatId: s.id })),
       });
-      // HELD 상태 조건을 다시 건 조건부 UPDATE — 만료 스케줄러(v2 예정) 등 다른 경로가
-      // 이 트랜잭션과 경합해 좌석을 회수했다면 여기서 count가 어긋나 전체 롤백된다.
+      // HELD 상태 조건을 다시 건 조건부 UPDATE — 만료 회수(스위퍼·TTL 알림·lazy 재선점)가
+      // 이 트랜잭션과 경합해 좌석을 가져갔다면 여기서 count가 어긋나 전체 롤백된다.
       const updated = await tx.showSeat.updateMany({
         where: {
           id: { in: seats.map((s) => s.id) },
@@ -69,8 +74,16 @@ export class ReservationsService {
         throw Errors.holdExpired();
       }
 
-      return { id: reservation.id, totalPrice };
+      return { id: reservation.id, totalPrice, seatIds: seats.map((s) => s.id) };
     });
+
+    // 확정된 좌석의 TTL 키는 더 이상 의미가 없다 — 남겨둬도 만료 알림이 조건부
+    // UPDATE(RESERVED라 0건)로 무해하지만, 불필요한 이벤트를 줄이기 위해 정리한다.
+    await this.redis.tryExec('확정 좌석 TTL 키 삭제', (client) =>
+      client.del(...created.seatIds.map((id) => holdKey(id))),
+    );
+
+    return { id: created.id, totalPrice: created.totalPrice };
   }
 
   async listMine(

@@ -29,9 +29,13 @@ export class RedisService implements OnModuleDestroy {
     this.client = this.createConnection();
   }
 
-  /** keyspace 알림 구독처럼 subscribe 모드가 필요한 곳에 전용 연결을 내어준다 */
+  /**
+   * keyspace 알림 구독처럼 subscribe 모드가 필요한 곳에 전용 연결을 내어준다.
+   * 일반 연결과 달리 오프라인 큐를 켠다 — 부팅 시점에 Redis가 죽어 있어도 subscribe
+   * 명령이 큐에 남아 연결되는 순간 구독이 성립하고, 재연결 시 ioredis가 재구독한다.
+   */
   createSubscriber(): Redis {
-    return this.createConnection();
+    return this.createConnection({ offlineQueue: true });
   }
 
   /** 연결된 DB 인덱스 — keyspace 이벤트 채널명(`__keyevent@{db}__:expired`)에 필요 */
@@ -52,10 +56,10 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  private createConnection(): Redis {
+  private createConnection(options: { offlineQueue?: boolean } = {}): Redis {
     const conn = new Redis(this.url, {
-      enableOfflineQueue: false,
-      maxRetriesPerRequest: 1,
+      enableOfflineQueue: options.offlineQueue ?? false,
+      maxRetriesPerRequest: options.offlineQueue ? null : 1,
       retryStrategy: (times) => Math.min(times * 500, 5_000),
     });
     // 'error' 리스너가 없으면 Node가 unhandled error로 프로세스를 죽인다 — 반드시 부착

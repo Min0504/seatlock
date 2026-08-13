@@ -72,6 +72,7 @@ export class ShowsService {
       include: { seat: true },
       orderBy: [{ seat: { section: 'asc' } }, { seat: { rowNo: 'asc' } }, { seat: { seatNo: 'asc' } }],
     });
+    const now = Date.now();
     return {
       showId,
       seats: seats.map((s) => ({
@@ -80,8 +81,21 @@ export class ShowsService {
         rowNo: s.seat.rowNo,
         seatNo: s.seat.seatNo,
         price: s.price,
-        status: s.status,
+        status: displayStatus(s, now),
       })),
     };
   }
+}
+
+/**
+ * 조회 응답용 상태 판정 — 만료됐지만 아직 회수되지 않은 HELD는 AVAILABLE로 보여준다.
+ * 실제 회수는 스위퍼·TTL 알림·재선점(lazy)이 하고, 여기서는 표시만 바꾼다:
+ * 조회 때마다 UPDATE를 하면 읽기 경로가 쓰기 경합에 끌려들어가기 때문.
+ */
+function displayStatus(seat: { status: SeatStatus; holdExpiresAt: Date | null }, now: number): SeatStatus {
+  const expired =
+    seat.status === SeatStatus.HELD &&
+    seat.holdExpiresAt !== null &&
+    seat.holdExpiresAt.getTime() <= now;
+  return expired ? SeatStatus.AVAILABLE : seat.status;
 }

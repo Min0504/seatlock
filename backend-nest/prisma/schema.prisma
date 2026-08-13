@@ -122,6 +122,9 @@ model ShowSeat {
   // 같은 회차에 같은 물리 좌석이 중복 생성되는 것을 스키마 수준에서 차단
   @@unique([showId, seatId])
   @@index([holdGroupId])
+  // 주의: Prisma가 표현하지 못하는 부분 인덱스가 있다 (migration 20260813150000):
+  // INDEX(hold_expires_at) WHERE status='HELD' — 만료 스위퍼의 30초 주기 스캔 전용.
+  // 인덱스 크기가 "현재 선점 중인 좌석 수"에만 비례한다(전체 좌석 대비 극소).
   @@map("show_seats")
 }
 
