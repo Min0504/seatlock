@@ -151,6 +151,9 @@ model ReservationSeat {
   reservation Reservation @relation(fields: [reservationId], references: [id])
   showSeat    ShowSeat    @relation(fields: [showSeatId], references: [id])
 
+  // 주의: 이 테이블에는 Prisma가 표현하지 못하는 부분 유니크 인덱스가 있다
+  // (migration 20260813110200): UNIQUE(show_seat_id) WHERE canceled = false
+  // — 유효 예매 기준 좌석당 1행. 이중 판매의 DB 레벨 최후 방어선.
   @@index([reservationId])
   @@map("reservation_seats")
 }
