@@ -1,0 +1,69 @@
+# SeatLock 전체 스택 — 한 번에 띄우는 시연/로컬 운영 구성 (기획서 §4)
+#
+#   docker compose up -d --build
+#   scripts/seed-demo.sh          # 데모 데이터 시드
+#   open http://localhost:8090    # 프론트 (nginx가 /api를 백엔드로 프록시)
+#
+# 개발용 인프라(테스트·로컬 개발)는 backend-nest/docker-compose.dev.yml을 그대로 쓴다.
+# 여기의 시크릿 기본값은 로컬 시연용이다 — 실배포는 환경변수/secret 매니저로 주입한다.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: seatlock
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seatlock}
+      POSTGRES_DB: seatlock
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U seatlock']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--notify-keyspace-events', 'Ex']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://postgres:5432/seatlock
+      DATABASE_USERNAME: seatlock
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-seatlock}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-local-demo-access-secret-32bytes!!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-local-demo-refresh-secret-32bytes!}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # JRE 이미지에 curl/wget이 없어 bash TCP 소켓으로 확인 — Tomcat은 컨텍스트
+      # 초기화(Flyway 포함)를 마친 뒤에야 포트를 열므로 "연결됨 = 기동 완료"다
+      test: ['CMD-SHELL', 'bash -c "exec 3<>/dev/tcp/127.0.0.1/8080"']
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+    # 관리자 API(시드)용으로만 노출 — 일반 트래픽은 frontend(nginx)를 지나 rate limit을 받는다
+    ports:
+      - '18080:8080'
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '8090:80'
+
+volumes:
+  pgdata:
