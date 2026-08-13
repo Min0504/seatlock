@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { Errors } from '../common/errors/errors';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
+import { SeatMapCacheService } from '../shows/seat-map-cache.service';
 import { ShowsService } from '../shows/shows.service';
 import { MAX_SEATS_PER_HOLD } from './dto/holds.dto';
 import { holdKey } from './hold-keys';
@@ -22,6 +23,7 @@ export class HoldsService {
     private readonly prisma: PrismaService,
     private readonly showsService: ShowsService,
     private readonly redis: RedisService,
+    private readonly seatMapCache: SeatMapCacheService,
   ) {}
 
   async hold(showId: bigint, userId: bigint, seatIds: number[]): Promise<HoldResult> {
@@ -115,6 +117,7 @@ export class HoldsService {
       }
       return pipeline.exec();
     });
+    await this.seatMapCache.invalidate(showId);
 
     return result;
   }
@@ -132,6 +135,7 @@ export class HoldsService {
     await this.redis.tryExec('선점 TTL 키 삭제', (client) =>
       client.del(...released.map((s) => holdKey(s.id))),
     );
+    await this.seatMapCache.invalidate(released[0].showId);
     return { releasedSeats: released.length };
   }
 }

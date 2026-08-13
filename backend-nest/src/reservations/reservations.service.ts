@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { holdKey } from '../holds/hold-keys';
 import { MockPgService } from '../payments/mock-pg.service';
+import { SeatMapCacheService } from '../shows/seat-map-cache.service';
 import { MyReservationsQuery } from './dto/reservations.dto';
 
 /** 공연 시작 24시간 전까지만 취소 가능 (기획서 §6 API 계약) */
@@ -61,6 +62,7 @@ export class ReservationsService {
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
     private readonly pg: MockPgService,
+    private readonly seatMapCache: SeatMapCacheService,
   ) {}
 
   /** 선점 좌석으로 미결제(PENDING) 예매를 생성한다. 좌석 상태는 바꾸지 않는다. */
@@ -136,9 +138,9 @@ export class ReservationsService {
     }
 
     if (reservation.status === ReservationStatus.PENDING) {
-      return this.cancelPending(userId, reservationId, reservation.holdGroupId);
+      return this.cancelPending(userId, reservationId, reservation.holdGroupId, reservation.showId);
     }
-    return this.cancelConfirmed(reservation.id, reservation.show.startsAt);
+    return this.cancelConfirmed(reservation.id, reservation.show.startsAt, reservation.showId);
   }
 
   /**
@@ -153,6 +155,7 @@ export class ReservationsService {
     userId: bigint,
     reservationId: bigint,
     holdGroupId: string | null,
+    showId: bigint,
   ): Promise<CancelResult> {
     let released: Array<{ id: bigint }>;
     try {
@@ -188,12 +191,17 @@ export class ReservationsService {
       await this.redis.tryExec('취소 좌석 TTL 키 삭제', (client) =>
         client.del(...released.map((s) => holdKey(s.id))),
       );
+      await this.seatMapCache.invalidate(showId);
     }
     return { id: reservationId, status: ReservationStatus.CANCELED, releasedSeats: released.length };
   }
 
   /** 결제 완료 예매 취소 — 좌석 원복 + 결제 CANCELED + PG 환불(mock) */
-  private async cancelConfirmed(reservationId: bigint, startsAt: Date): Promise<CancelResult> {
+  private async cancelConfirmed(
+    reservationId: bigint,
+    startsAt: Date,
+    showId: bigint,
+  ): Promise<CancelResult> {
     if (startsAt.getTime() - Date.now() < CANCEL_DEADLINE_MS) {
       throw Errors.cancelWindowClosed();
     }
@@ -236,6 +244,7 @@ export class ReservationsService {
     if (result === null) {
       return { id: reservationId, status: ReservationStatus.CANCELED, releasedSeats: 0 };
     }
+    await this.seatMapCache.invalidate(showId);
     // 환불은 DB 확정 후 실행한다. mock PG의 cancel은 멱등이라 재시도에 안전하지만,
     // 실 PG라면 "DB는 취소됐는데 환불 요청이 유실"될 수 있는 지점 — 아웃박스/재시도가
     // 필요한 주제이며 이 포트폴리오에서는 HookRelay가 그 문제를 전담한다.

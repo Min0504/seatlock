@@ -6,6 +6,7 @@ import { Errors } from '../common/errors/errors';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
 import { holdKey } from '../holds/hold-keys';
+import { SeatMapCacheService } from '../shows/seat-map-cache.service';
 import { CreatePaymentDto } from './dto/payments.dto';
 import { MockPgService, PgTimeoutError } from './mock-pg.service';
 
@@ -51,6 +52,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly pg: MockPgService,
     private readonly redis: RedisService,
+    private readonly seatMapCache: SeatMapCacheService,
   ) {}
 
   async pay(userId: bigint, idempotencyKey: string, dto: CreatePaymentDto): Promise<PayResult> {
@@ -258,6 +260,7 @@ export class PaymentsService {
       await this.redis.tryExec('확정 좌석 TTL 키 삭제', (client) =>
         client.del(...seatIds.map((id) => holdKey(id))),
       );
+      await this.seatMapCache.invalidate(reservation.showId);
 
       return { payment: toView(finalPayment), replayed: false };
     } catch (e) {

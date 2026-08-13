@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ShowsModule } from '../shows/shows.module';
 import { MockPgService } from './mock-pg.service';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 
 @Module({
+  imports: [ShowsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService, MockPgService],
   // 예매 취소(환불)도 같은 PG 클라이언트를 쓴다 — 인스턴스가 갈리면 mock의
