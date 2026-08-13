@@ -6,12 +6,16 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { RolesGuard } from './auth/guards/roles.guard';
 import { validateEnv } from './common/config/env.validation';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { PerformancesModule } from './performances/performances.module';
+import { ShowsModule } from './shows/shows.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnv }),
     PrismaModule,
     AuthModule,
+    PerformancesModule,
+    ShowsModule,
   ],
   providers: [
     // 인증을 기본값(deny-by-default)으로 두고 공개 라우트만 @Public으로 여는 구조 —
