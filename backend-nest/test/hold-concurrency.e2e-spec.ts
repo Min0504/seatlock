@@ -110,7 +110,6 @@ describe('동일 좌석 동시 선점 — 초과판매 방지 (e2e)', () => {
       acc[r.status] = (acc[r.status] ?? 0) + 1;
       return acc;
     }, {});
-    // eslint-disable-next-line no-console
     console.log(`[동시 선점 분포] ${JSON.stringify(distribution)} — 성공 ${successes.length}건`);
 
     expect(successes).toHaveLength(1);

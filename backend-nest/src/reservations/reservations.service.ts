@@ -49,8 +49,14 @@ export class ReservationsService {
       await tx.reservationSeat.createMany({
         data: seats.map((s) => ({ reservationId: reservation.id, showSeatId: s.id })),
       });
-      await tx.showSeat.updateMany({
-        where: { id: { in: seats.map((s) => s.id) } },
+      // HELD 상태 조건을 다시 건 조건부 UPDATE — 만료 스케줄러(v2 예정) 등 다른 경로가
+      // 이 트랜잭션과 경합해 좌석을 회수했다면 여기서 count가 어긋나 전체 롤백된다.
+      const updated = await tx.showSeat.updateMany({
+        where: {
+          id: { in: seats.map((s) => s.id) },
+          status: SeatStatus.HELD,
+          holdGroupId,
+        },
         data: {
           status: SeatStatus.RESERVED,
           // 확정 이후의 소유 추적은 reservation_seats가 담당하므로 hold 필드는 비운다
@@ -59,6 +65,9 @@ export class ReservationsService {
           holdExpiresAt: null,
         },
       });
+      if (updated.count !== seats.length) {
+        throw Errors.holdExpired();
+      }
 
       return { id: reservation.id, totalPrice };
     });
