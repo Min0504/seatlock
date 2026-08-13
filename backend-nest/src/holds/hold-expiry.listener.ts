@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SeatStatus } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RedisService } from '../common/redis/redis.service';
+import { SeatMapCacheService } from '../shows/seat-map-cache.service';
 import { parseHoldKey } from './hold-keys';
 
 /**
@@ -18,6 +19,7 @@ export class HoldExpiryListener implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly redis: RedisService,
+    private readonly seatMapCache: SeatMapCacheService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -48,11 +50,12 @@ export class HoldExpiryListener implements OnModuleInit {
     try {
       // 알림이 지연 도착해 좌석이 이미 재선점(미래 만료시각)·확정(RESERVED)됐을 수 있다.
       // status·만료시각을 다시 확인하는 조건부 UPDATE라 늦거나 중복된 알림은 0건 갱신으로 무해하다.
-      const released = await this.prisma.showSeat.updateMany({
+      const released = await this.prisma.showSeat.updateManyAndReturn({
         where: { id: showSeatId, status: SeatStatus.HELD, holdExpiresAt: { lte: new Date() } },
         data: { status: SeatStatus.AVAILABLE, holdUserId: null, holdGroupId: null, holdExpiresAt: null },
       });
-      if (released.count > 0) {
+      if (released.length > 0) {
+        await this.seatMapCache.invalidate(released[0].showId);
         this.logger.log(`TTL 알림으로 좌석 ${showSeatId} 즉시 회수`);
       }
     } catch (e) {

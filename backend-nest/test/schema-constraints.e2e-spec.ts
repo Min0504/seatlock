@@ -32,7 +32,7 @@ describe('스키마 제약 — 이중 판매 최후 방어선', () => {
       data: { venueId: venue.id, section: 'A', rowNo: '1', seatNo: 1 },
     });
     const performance = await prisma.performance.create({
-      data: { title: 'p', venueId: venue.id },
+      data: { title: 'p', venueId: venue.id, searchText: 'p' },
     });
     const show = await prisma.show.create({
       data: { performanceId: performance.id, startsAt: new Date(), ticketOpenAt: new Date() },

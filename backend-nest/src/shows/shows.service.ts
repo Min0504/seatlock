@@ -3,9 +3,11 @@ import { Prisma, SeatStatus, Show } from '@prisma/client';
 import { Errors } from '../common/errors/errors';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateShowSeatsDto } from './dto/shows.dto';
+import { SeatMapCacheService } from './seat-map-cache.service';
 
 export interface SeatMapEntry {
-  id: bigint;
+  /** 캐시 왕복(JSON 직렬화)을 거치므로 BigInt가 아닌 number로 고정 */
+  id: number;
   section: string;
   rowNo: string;
   seatNo: number;
@@ -13,9 +15,17 @@ export interface SeatMapEntry {
   status: SeatStatus;
 }
 
+export interface SeatMapPayload {
+  showId: number;
+  seats: SeatMapEntry[];
+}
+
 @Injectable()
 export class ShowsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly seatMapCache: SeatMapCacheService,
+  ) {}
 
   async getShowOrThrow(showId: bigint): Promise<Show> {
     const show = await this.prisma.show.findUnique({ where: { id: showId } });
@@ -65,7 +75,17 @@ export class ShowsService {
     }
   }
 
-  async getSeatMap(showId: bigint): Promise<{ showId: bigint; seats: SeatMapEntry[] }> {
+  /**
+   * 좌석맵 조회 — 오픈 순간 조회가 폭주하는 이 시스템의 읽기 병목 지점.
+   * 캐시 히트 시 DB를 전혀 만지지 않고, 미스 시 DB에서 만들어 5초 TTL로 심는다.
+   * 무효화는 좌석 상태를 바꾸는 쪽(선점·해제·결제 확정·취소·만료 회수)의 책임이다.
+   */
+  async getSeatMap(showId: bigint): Promise<SeatMapPayload> {
+    const cached = await this.seatMapCache.get(showId);
+    if (cached !== null) {
+      return JSON.parse(cached) as SeatMapPayload;
+    }
+
     await this.getShowOrThrow(showId);
     const seats = await this.prisma.showSeat.findMany({
       where: { showId },
@@ -73,10 +93,10 @@ export class ShowsService {
       orderBy: [{ seat: { section: 'asc' } }, { seat: { rowNo: 'asc' } }, { seat: { seatNo: 'asc' } }],
     });
     const now = Date.now();
-    return {
-      showId,
+    const payload: SeatMapPayload = {
+      showId: Number(showId),
       seats: seats.map((s) => ({
-        id: s.id,
+        id: Number(s.id),
         section: s.seat.section,
         rowNo: s.seat.rowNo,
         seatNo: s.seat.seatNo,
@@ -84,6 +104,9 @@ export class ShowsService {
         status: displayStatus(s, now),
       })),
     };
+    // 존재하는 회차만 캐시된다 — 404는 위에서 던져져 미스 경로가 캐시를 오염시키지 않는다
+    await this.seatMapCache.set(showId, JSON.stringify(payload));
+    return payload;
   }
 }
 

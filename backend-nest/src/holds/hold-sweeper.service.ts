@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { SeatMapCacheService } from '../shows/seat-map-cache.service';
 
 export const HOLD_SWEEPER_INTERVAL = 'hold-sweeper';
 
@@ -15,7 +16,10 @@ export const HOLD_SWEEPER_INTERVAL = 'hold-sweeper';
 export class HoldSweeperService {
   private readonly logger = new Logger(HoldSweeperService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly seatMapCache: SeatMapCacheService,
+  ) {}
 
   @Interval(HOLD_SWEEPER_INTERVAL, 30_000)
   async sweep(): Promise<number> {
@@ -23,13 +27,16 @@ export class HoldSweeperService {
     // 달라도 hold_expires_at을 기록한 DB 자신이 판정하면 기준이 하나로 유지된다.
     // 이 UPDATE는 멱등이라 서버 2대가 동시에 실행해도 안전하다(두 번째는 0건 갱신).
     // 비멱등 배치가 생기면 그때 ShedLock 같은 분산 잠금이 필요해진다 — PointLedger에서 다룬다.
-    const reclaimed = await this.prisma.$executeRaw`
+    const reclaimed = await this.prisma.$queryRaw<Array<{ show_id: bigint }>>`
       UPDATE show_seats
          SET status = 'AVAILABLE', hold_user_id = NULL, hold_group_id = NULL, hold_expires_at = NULL
-       WHERE status = 'HELD' AND hold_expires_at < now()`;
-    if (reclaimed > 0) {
-      this.logger.log(`만료 선점 ${reclaimed}석 회수`);
+       WHERE status = 'HELD' AND hold_expires_at < now()
+       RETURNING show_id`;
+    if (reclaimed.length > 0) {
+      const showIds = [...new Set(reclaimed.map((r) => r.show_id))];
+      await this.seatMapCache.invalidate(...showIds);
+      this.logger.log(`만료 선점 ${reclaimed.length}석 회수 (회차 ${showIds.length}개 캐시 무효화)`);
     }
-    return reclaimed;
+    return reclaimed.length;
   }
 }

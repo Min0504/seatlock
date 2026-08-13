@@ -8,10 +8,20 @@ import {
   CreateVenueDto,
   ListPerformancesQuery,
 } from './dto/performances.dto';
+import { PerformanceListCacheService } from './performance-list-cache.service';
+
+export interface PerformanceListPayload {
+  /** 캐시 왕복(JSON 직렬화)을 거치므로 BigInt가 아닌 number로 고정 */
+  items: Array<{ id: number; title: string; posterUrl: string | null; venueName: string }>;
+  nextCursor: string | null;
+}
 
 @Injectable()
 export class PerformancesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly listCache: PerformanceListCacheService,
+  ) {}
 
   async createVenue(dto: CreateVenueDto): Promise<{ id: bigint; seatCount: number }> {
     return this.prisma.$transaction(async (tx) => {
@@ -40,8 +50,11 @@ export class PerformancesService {
         title: dto.title,
         description: dto.description,
         venueId: venue.id,
+        // 검색 결합 컬럼 — 제목/설명(출연진 포함)을 한 컬럼에 모아 GIN 인덱스 하나로 검색
+        searchText: [dto.title, dto.description].filter(Boolean).join(' '),
       },
     });
+    await this.listCache.invalidate();
     return { id: performance.id };
   }
 
@@ -62,16 +75,25 @@ export class PerformancesService {
     return { id: show.id };
   }
 
-  async list(query: ListPerformancesQuery): Promise<{
-    items: Array<{ id: bigint; title: string; posterUrl: string | null; venueName: string }>;
-    nextCursor: string | null;
-  }> {
+  async list(query: ListPerformancesQuery): Promise<PerformanceListPayload> {
     const size = query.size ?? 20;
+
+    // 캐시는 "필터 없는 첫 페이지"만 — 메인 진입 시 전원이 때리는 유일한 핫스팟이다.
+    // 검색어·날짜·커서 조합까지 캐시하면 키 수가 폭발하는데 히트율은 바닥이라 실익이 없다.
+    const cacheable = !query.q && !query.date && !query.cursor && size === 20;
+    if (cacheable) {
+      const cached = await this.listCache.get();
+      if (cached !== null) {
+        return JSON.parse(cached) as PerformanceListPayload;
+      }
+    }
+
     const where: Prisma.PerformanceWhereInput = {};
     if (query.q) {
-      // v1: ILIKE 부분 일치. '%검색어%'는 B-Tree 인덱스를 못 타므로
-      // v2에서 pg_trgm GIN 인덱스로 개선한다 (EXPLAIN 전후 비교 예정)
-      where.title = { contains: query.q, mode: 'insensitive' };
+      // '%검색어%' 부분 일치. Prisma의 contains/insensitive는 ILIKE로 컴파일되고,
+      // search_text의 GIN(gin_trgm_ops) 인덱스가 이를 인덱스 스캔으로 처리한다
+      // (제목만이 아니라 설명·출연진까지 한 컬럼으로 검색 — 스키마 주석 참조)
+      where.searchText = { contains: query.q, mode: 'insensitive' };
     }
     if (query.date) {
       const dayStart = new Date(`${query.date}T00:00:00+09:00`);
@@ -93,15 +115,19 @@ export class PerformancesService {
 
     const hasNext = rows.length > size;
     const items = (hasNext ? rows.slice(0, size) : rows).map((p) => ({
-      id: p.id,
+      id: Number(p.id),
       title: p.title,
       posterUrl: p.posterUrl,
       venueName: p.venue.name,
     }));
-    return {
+    const payload: PerformanceListPayload = {
       items,
       nextCursor: hasNext ? String(items[items.length - 1].id) : null,
     };
+    if (cacheable) {
+      await this.listCache.set(JSON.stringify(payload));
+    }
+    return payload;
   }
 
   async detail(id: bigint): Promise<{
