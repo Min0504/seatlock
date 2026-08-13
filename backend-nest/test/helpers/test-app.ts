@@ -19,6 +19,8 @@ export interface TestContext {
 export interface TestAppOptions {
   /** false면 접속 불가능한 Redis 주소로 기동 — "Redis가 죽어도 서비스는 산다" 검증용 */
   redis?: boolean;
+  /** DI 프로바이더 교체 — mock PG의 타임아웃처럼 실물로 못 만드는 장애를 주입할 때 쓴다 */
+  overrideProviders?: Array<{ provide: unknown; useValue: unknown }>;
 }
 
 /**
@@ -57,7 +59,11 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestC
   const { AppModule } = await import('../../src/app.module');
   const { configureApp } = await import('../../src/app.setup');
 
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  for (const override of options.overrideProviders ?? []) {
+    builder = builder.overrideProvider(override.provide).useValue(override.useValue);
+  }
+  const moduleRef = await builder.compile();
   const app = configureApp(moduleRef.createNestApplication());
   await app.init();
   await app.listen(0);

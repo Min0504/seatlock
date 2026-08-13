@@ -12,13 +12,14 @@ export async function httpJson<T>(
   baseUrl: string,
   method: 'GET' | 'POST' | 'DELETE' | 'PATCH',
   path: string,
-  options: { token?: string; body?: unknown } = {},
+  options: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
 ): Promise<JsonResponse<T>> {
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       'content-type': 'application/json',
       ...(options.token ? { authorization: `Bearer ${options.token}` } : {}),
+      ...options.headers,
     },
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
