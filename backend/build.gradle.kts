@@ -33,6 +33,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     // 좌석맵·목록·통계 캐시 (기획서 §9). 클라이언트는 기본 Lettuce.
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    // [실험 브랜치 전용] Redis 분산락 — RLock/MultiLock을 위해 Redisson 코어만 추가
+    // (starter는 자동설정·의존성이 과함. 접속 설정은 RedissonConfig에서 spring.data.redis 재사용)
+    implementation("org.redisson:redisson:3.52.0")
 
     // 스키마는 Flyway가 소유한다(V1 = Prisma 마이그레이션 스냅샷). JPA는 validate만.
     implementation("org.flywaydb:flyway-core")
