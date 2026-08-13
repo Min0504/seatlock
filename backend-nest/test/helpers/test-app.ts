@@ -9,6 +9,8 @@ import * as path from 'node:path';
 export interface TestContext {
   app: INestApplication;
   container: StartedPostgreSqlContainer;
+  /** 동시성 테스트용 실제 리슨 주소 — supertest는 병렬 요청에서 불안정해 fetch를 쓴다 */
+  baseUrl: string;
 }
 
 /**
@@ -39,8 +41,10 @@ export async function createTestApp(): Promise<TestContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = configureApp(moduleRef.createNestApplication());
   await app.init();
+  await app.listen(0);
+  const baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1');
 
-  return { app, container };
+  return { app, container, baseUrl };
 }
 
 /** 관리자 계정은 가입 API로 만들 수 없으므로(권한 상승 차단) 테스트에서 직접 심는다 */
@@ -55,4 +59,27 @@ export async function seedAdmin(
     data: { email, passwordHash: await bcrypt.hash(password, 4), role: Role.ADMIN },
   });
   return { email, password };
+}
+
+/**
+ * 동시성 테스트용 사용자 대량 생성.
+ * 가입 API를 N번 호출하면 bcrypt(cost 12) 해싱만 N×수백ms가 걸리므로,
+ * 동일 해시(cost 4)를 한 번만 계산해 createMany로 심는다 — 검증 대상은
+ * 선점 로직이지 가입 성능이 아니다.
+ */
+export async function seedUsers(
+  app: INestApplication,
+  count: number,
+): Promise<Array<{ email: string; password: string }>> {
+  const { PrismaService } = await import('../../src/common/prisma/prisma.service');
+  const prisma = app.get(PrismaService);
+  const password = 'password1234';
+  const passwordHash = await bcrypt.hash(password, 4);
+  const users = Array.from({ length: count }, (_, i) => ({
+    email: `racer${i}@test.com`,
+    passwordHash,
+    role: Role.USER,
+  }));
+  await prisma.user.createMany({ data: users });
+  return users.map((u) => ({ email: u.email, password }));
 }
