@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-nest:
+    name: backend-nest (lint + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend-nest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend-nest/package-lock.json
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: Prisma Client 생성
+        run: npx prisma generate
+
+      - name: 린트
+        run: npm run lint
+
+      - name: 빌드
+        run: npm run build
+
+      - name: 단위 테스트
+        run: npm test
+
+      - name: e2e 테스트 (Testcontainers)
+        run: npm run test:e2e
