@@ -43,7 +43,13 @@ describe('스키마 제약 — 이중 판매 최후 방어선', () => {
 
     const makeReservation = (userId: bigint) =>
       prisma.reservation.create({
-        data: { userId, showId: show.id, status: ReservationStatus.CONFIRMED, totalPrice: 1000 },
+        data: {
+          userId,
+          showId: show.id,
+          status: ReservationStatus.CONFIRMED,
+          totalPrice: 1000,
+          seatCount: 1,
+        },
       });
 
     const r1 = await makeReservation(user1.id);

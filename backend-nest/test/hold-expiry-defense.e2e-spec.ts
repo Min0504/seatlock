@@ -248,7 +248,7 @@ describe('Redis 다운 폴백 (e2e)', () => {
     await teardownTestApp(ctx);
   });
 
-  it('선점·해제·예매 확정이 전부 동작한다 (DB 폴백, 성능만 저하)', async () => {
+  it('선점·해제·예매 생성이 전부 동작한다 (DB 폴백, 성능만 저하)', async () => {
     const hold = await httpJson<HoldResponse>(base, 'POST', `/shows/${showId}/holds`, {
       token,
       body: { seatIds: [seatId] },
@@ -263,13 +263,15 @@ describe('Redis 다운 폴백 (e2e)', () => {
       body: { seatIds: [seatId] },
     });
     expect(holdAgain.status).toBe(201);
-    const reservation = await httpJson<{ id: number }>(base, 'POST', '/reservations', {
+    const reservation = await httpJson<{ id: number; status: string }>(base, 'POST', '/reservations', {
       token,
       body: { holdGroupId: holdAgain.body.holdGroupId },
     });
     expect(reservation.status).toBe(201);
+    expect(reservation.body.status).toBe('PENDING');
 
+    // 좌석은 결제 전까지 HELD로 유지된다
     const row = await prisma.showSeat.findUniqueOrThrow({ where: { id: BigInt(seatId) } });
-    expect(row.status).toBe(SeatStatus.RESERVED);
+    expect(row.status).toBe(SeatStatus.HELD);
   });
 });
