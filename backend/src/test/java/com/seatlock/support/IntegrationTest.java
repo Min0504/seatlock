@@ -43,6 +43,9 @@ public abstract class IntegrationTest {
         // HS256 키는 256bit(32byte) 이상이어야 jjwt가 수용한다
         registry.add("jwt.access-secret", () -> "test-access-secret-must-be-at-least-32-bytes");
         registry.add("jwt.refresh-secret", () -> "test-refresh-secret-must-be-at-least-32-bytes");
+        // 백그라운드 스위퍼를 끈다 — "만료됐지만 회수 전" 상태를 결정적으로 만들기 위함.
+        // 회수 SQL 자체는 SeatStateRepository.reclaimExpired()를 직접 호출해 검증한다.
+        registry.add("seatlock.hold-sweeper.enabled", () -> "false");
     }
 
     @Autowired
@@ -70,6 +73,10 @@ public abstract class IntegrationTest {
 
     protected ResponseEntity<Map<String, Object>> get(String path, String token, Object... uriVars) {
         return rest.exchange(path, HttpMethod.GET, entity(null, token), JSON_MAP, uriVars);
+    }
+
+    protected ResponseEntity<Map<String, Object>> delete(String path, String token) {
+        return rest.exchange(path, HttpMethod.DELETE, entity(null, token), JSON_MAP);
     }
 
     private HttpEntity<Object> entity(Object body, String token) {
