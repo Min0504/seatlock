@@ -56,19 +56,32 @@ public abstract class DomainTestSupport extends IntegrationTest {
     }
 
     protected TestUser newUser() {
+        return newUser(Role.USER);
+    }
+
+    protected TestUser newAdmin() {
+        return newUser(Role.ADMIN);
+    }
+
+    private TestUser newUser(Role role) {
         if (sharedHash == null) {
             sharedHash = passwordEncoder.encode("password1234");
         }
         User user = userRepository.save(User.builder()
                 .email("domain" + USER_SEQ.getAndIncrement() + "@test.com")
                 .passwordHash(sharedHash)
-                .role(Role.USER)
+                .role(role)
                 .build());
-        return new TestUser(user.getId(), jwtProvider.issueAccessToken(user.getId(), Role.USER));
+        return new TestUser(user.getId(), jwtProvider.issueAccessToken(user.getId(), role));
     }
 
     /** 좌석 n개짜리 회차 — 티켓 오픈 시각만 바꿔가며 시나리오를 만든다 */
     protected SeededShow seedShow(int seatCount, Instant ticketOpenAt) {
+        return seedShow(seatCount, ticketOpenAt, Instant.now().plus(30, ChronoUnit.DAYS));
+    }
+
+    /** startsAt까지 지정하는 변형 — 취소 24시간 규칙 같은 시각 조건 시나리오용 */
+    protected SeededShow seedShow(int seatCount, Instant ticketOpenAt, Instant startsAt) {
         Venue venue = venueRepository.save(Venue.builder()
                 .name("테스트홀").address("서울").build());
         for (int i = 1; i <= seatCount; i++) {
@@ -79,7 +92,7 @@ public abstract class DomainTestSupport extends IntegrationTest {
                 .title("동시성 실험 공연").venue(venue).build());
         Show show = showRepository.save(Show.builder()
                 .performance(performance)
-                .startsAt(Instant.now().plus(30, ChronoUnit.DAYS))
+                .startsAt(startsAt)
                 .ticketOpenAt(ticketOpenAt)
                 .build());
         jdbc.update("""

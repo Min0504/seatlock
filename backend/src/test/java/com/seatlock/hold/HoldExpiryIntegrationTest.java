@@ -92,7 +92,7 @@ class HoldExpiryIntegrationTest extends DomainTestSupport {
         String other = newUser().token();
         assertThat(hold(other, List.of(liveSeat)).getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
-        int reclaimed = seatStateRepository.reclaimExpired();
+        int reclaimed = seatStateRepository.reclaimExpired().size();
         assertThat(reclaimed).isEqualTo(1);
 
         Map<String, Object> expired = jdbc.queryForMap(

@@ -23,6 +23,18 @@ spring:
   flyway:
     enabled: true
 
+  data:
+    redis:
+      # backend-nest의 dev compose Redis(63790)를 공유한다 — 캐시 키에 충돌이 없고
+      # (양쪽이 같은 키 규약을 쓰므로 오히려 무효화가 상호 호환된다), 캐시는 소실돼도
+      # DB에서 재구성되는 데이터라 격리할 이유가 없다.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:63790}
+      # 캐시는 보조 수단이다 — Redis가 느려질 때 API 응답이 같이 느려지면 안 되므로
+      # 짧게 끊고 DB 직행으로 폴백한다 (CacheClient가 예외를 흡수)
+      timeout: 300ms
+      connect-timeout: 300ms
+
 jwt:
   # Nest 구현과 동일한 계약: HS256, access 15분 / refresh 14일 (기획서 §4)
   access-secret: ${JWT_ACCESS_SECRET}

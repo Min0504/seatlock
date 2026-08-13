@@ -1,0 +1,188 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: bench/hold-contention.js
+        output: -
+
+     scenarios: (100.00%) 2 scenarios, 150 max VUs, 1m5s max duration (incl. graceful stop):
+              * single_seat: 1 iterations for each of 100 VUs (maxDuration: 30s, exec: singleSeat, gracefulStop: 30s)
+              * spread: 50 looping VUs for 20s (exec: spread, startTime: 15s, gracefulStop: 30s)
+
+
+running (0m01.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  14.0s     
+
+running (0m02.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  13.0s     
+
+running (0m03.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  12.0s     
+
+running (0m04.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  11.0s     
+
+running (0m05.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  10.0s     
+
+running (0m06.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  09.0s     
+
+running (0m07.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  08.0s     
+
+running (0m08.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  07.0s     
+
+running (0m09.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  06.0s     
+
+running (0m10.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  05.0s     
+
+running (0m11.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  04.0s     
+
+running (0m12.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  03.0s     
+
+running (0m13.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  02.0s     
+
+running (0m14.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  01.0s     
+
+running (0m15.0s), 000/150 VUs, 100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      • [   0% ] waiting  00.0s     
+
+running (0m16.0s), 050/150 VUs, 912 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [   5% ] 50 VUs   01.0s/20s 
+
+running (0m17.0s), 050/150 VUs, 2011 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  10% ] 50 VUs   02.0s/20s 
+
+running (0m18.0s), 050/150 VUs, 3209 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  15% ] 50 VUs   03.0s/20s 
+
+running (0m19.0s), 050/150 VUs, 4514 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  20% ] 50 VUs   04.0s/20s 
+
+running (0m20.0s), 050/150 VUs, 5918 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  25% ] 50 VUs   05.0s/20s 
+
+running (0m21.0s), 050/150 VUs, 7314 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  30% ] 50 VUs   06.0s/20s 
+
+running (0m22.0s), 050/150 VUs, 9222 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  35% ] 50 VUs   07.0s/20s 
+
+running (0m23.0s), 050/150 VUs, 11320 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  40% ] 50 VUs   08.0s/20s 
+
+running (0m24.0s), 050/150 VUs, 13465 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  45% ] 50 VUs   09.0s/20s 
+
+running (0m25.0s), 050/150 VUs, 15668 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  50% ] 50 VUs   10.0s/20s 
+
+running (0m26.0s), 050/150 VUs, 17859 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  55% ] 50 VUs   11.0s/20s 
+
+running (0m27.0s), 050/150 VUs, 19958 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  60% ] 50 VUs   12.0s/20s 
+
+running (0m28.0s), 050/150 VUs, 22100 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  65% ] 50 VUs   13.0s/20s 
+
+running (0m29.0s), 050/150 VUs, 24198 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  70% ] 50 VUs   14.0s/20s 
+
+running (0m30.0s), 050/150 VUs, 26375 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  75% ] 50 VUs   15.0s/20s 
+
+running (0m31.0s), 050/150 VUs, 28515 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  80% ] 50 VUs   16.0s/20s 
+
+running (0m32.0s), 050/150 VUs, 30674 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  85% ] 50 VUs   17.0s/20s 
+
+running (0m33.0s), 050/150 VUs, 32850 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  90% ] 50 VUs   18.0s/20s 
+
+running (0m34.0s), 050/150 VUs, 35002 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [  95% ] 50 VUs   19.0s/20s 
+
+running (0m35.0s), 050/150 VUs, 37232 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread        [ 100% ] 50 VUs   20.0s/20s 
+
+
+  █ TOTAL RESULTS 
+
+    CUSTOM
+    hold_conflict..................: 16876  481.88984/s
+    hold_win.......................: 20456  584.115819/s
+    single_seat_latency............: avg=104.86ms med=107.44ms p(95)=149.3ms p(99)=149.82ms max=150.35ms
+    spread_latency.................: avg=17.88ms  med=15.43ms  p(95)=34.18ms p(99)=51.82ms  max=125.02ms
+
+    HTTP
+    http_req_duration..............: avg=17.41ms  med=14.97ms  p(95)=33.6ms  p(99)=53.18ms  max=150.35ms
+      { expected_response:true }...: avg=17.33ms  med=15.12ms  p(95)=33.47ms p(99)=50.78ms  max=128.04ms
+    http_req_failed................: 29.20% 16876 out of 57787
+    http_reqs......................: 57787  1650.092923/s
+
+    EXECUTION
+    iteration_duration.............: avg=27.08ms  med=27.41ms  p(95)=54.67ms p(99)=84.3ms   max=181.41ms
+    iterations.....................: 37332  1066.005659/s
+    vus............................: 50     min=0              max=50 
+    vus_max........................: 150    min=150            max=150
+
+    NETWORK
+    data_received..................: 23 MB  665 kB/s
+    data_sent......................: 18 MB  508 kB/s
+
+
+
+
+running (0m35.0s), 000/150 VUs, 37332 complete and 0 interrupted iterations
+single_seat ✓ [ 100% ] 100 VUs  00.2s/30s  100/100 iters, 1 per VU
+spread      ✓ [ 100% ] 50 VUs   20s       

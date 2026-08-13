@@ -31,6 +31,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    // 좌석맵·목록·통계 캐시 (기획서 §9). 클라이언트는 기본 Lettuce.
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
     // 스키마는 Flyway가 소유한다(V1 = Prisma 마이그레이션 스냅샷). JPA는 validate만.
     implementation("org.flywaydb:flyway-core")

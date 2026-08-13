@@ -1,5 +1,7 @@
 package com.seatlock.hold;
 
+import com.seatlock.show.SeatMapCache;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,13 +28,16 @@ public class HoldSweeper {
     public static final long INTERVAL_MS = 30_000;
 
     private final SeatStateRepository seatStateRepository;
+    private final SeatMapCache seatMapCache;
 
     // fixedDelay: 이전 실행이 끝난 뒤 30초 — 스캔이 오래 걸려도 실행이 겹치지 않는다
     @Scheduled(fixedDelay = INTERVAL_MS)
     public void sweep() {
-        int reclaimed = seatStateRepository.reclaimExpired();
-        if (reclaimed > 0) {
-            log.info("만료 선점 {}석 회수", reclaimed);
+        List<Long> reclaimedShowIds = seatStateRepository.reclaimExpired();
+        if (!reclaimedShowIds.isEmpty()) {
+            long[] showIds = reclaimedShowIds.stream().distinct().mapToLong(Long::longValue).toArray();
+            seatMapCache.invalidate(showIds);
+            log.info("만료 선점 {}석 회수 (회차 {}개 캐시 무효화)", reclaimedShowIds.size(), showIds.length);
         }
     }
 }

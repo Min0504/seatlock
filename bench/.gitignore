@@ -1,0 +1,5 @@
+# 루트 .gitignore의 out/ 제외를 벤치 측정 결과에 한해 되돌린다 —
+# *-summary.json·*.txt는 docs/lock-benchmark.md의 원본 데이터로 보존한다.
+!out/
+# 시드 산출물 — 벤치 사용자 100명의 JWT가 들어 있어 커밋하지 않는다
+out/ctx.json
