@@ -115,12 +115,17 @@ model Performance {
   description String?
   posterUrl   String? @map("poster_url") @db.VarChar(500)
   venueId     BigInt  @map("venue_id")
+  // 검색 전용 결합 컬럼(title + description). '%검색어%'는 B-Tree를 못 타므로
+  // 이 컬럼에 GIN(gin_trgm_ops) 인덱스를 건다 — 마이그레이션 수동 작성 참조.
+  searchText  String  @map("search_text")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
   venue Venue  @relation(fields: [venueId], references: [id])
   shows Show[]
 
+  // 주의: Prisma가 표현하지 못하는 인덱스(마이그레이션 수동 작성):
+  // GIN(search_text gin_trgm_ops) — ILIKE '%q%' 부분 일치 검색용
   @@map("performances")
 }
 

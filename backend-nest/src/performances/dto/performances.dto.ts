@@ -82,7 +82,7 @@ export class CreateShowDto {
 }
 
 export class ListPerformancesQuery {
-  @ApiPropertyOptional({ description: '제목 검색어' })
+  @ApiPropertyOptional({ description: '검색어 — 제목·설명(출연진) 부분 일치' })
   @IsOptional()
   @IsString()
   @MaxLength(100)
