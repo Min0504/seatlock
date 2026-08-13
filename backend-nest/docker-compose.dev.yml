@@ -1,0 +1,24 @@
+# 로컬 개발/마이그레이션 생성용 인프라 (테스트는 Testcontainers가 자체 기동)
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: seatlock-dev-postgres
+    environment:
+      POSTGRES_USER: seatlock
+      POSTGRES_PASSWORD: seatlock
+      POSTGRES_DB: seatlock
+    ports:
+      - '55432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U seatlock']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: seatlock-dev-redis
+    # 선점 TTL 만료 알림(keyspace notification)을 개발 환경에서도 활성화
+    command: ['redis-server', '--notify-keyspace-events', 'Ex']
+    ports:
+      - '63790:6379'
