@@ -1,5 +1,7 @@
 package com.seatlock.show;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatlock.common.error.DomainException;
 import com.seatlock.common.error.ErrorCode;
 import com.seatlock.performance.Seat;
@@ -14,14 +16,17 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShowService {
@@ -30,6 +35,8 @@ public class ShowService {
     private final ShowSeatRepository showSeatRepository;
     private final SeatRepository seatRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final SeatMapCache seatMapCache;
+    private final ObjectMapper objectMapper;
 
     /**
      * 공연장 좌석 템플릿 → 회차 좌석 인스턴스 일괄 생성 (Nest ShowsService 포팅).
@@ -83,9 +90,24 @@ public class ShowService {
         return new CreateSeatsResponse(templates.size());
     }
 
-    /** 좌석맵 조회 — 만료됐지만 아직 회수 전인 HELD는 AVAILABLE로 보여준다(lazy 판정) */
-    @Transactional(readOnly = true)
+    /**
+     * 좌석맵 조회 — 오픈 순간 조회가 폭주하는 이 시스템의 읽기 병목 지점.
+     * 캐시 히트 시 DB를 전혀 만지지 않고(그래서 @Transactional을 걸지 않는다 —
+     * 히트 경로가 커넥션을 잡으면 캐시의 의미가 반감된다), 미스 시 DB에서 만들어
+     * 5초 TTL로 심는다. 무효화는 좌석 상태를 바꾸는 쪽(선점·해제·결제 확정·취소·
+     * 만료 회수)의 책임이다.
+     */
     public SeatMapResponse getSeatMap(Long showId) {
+        Optional<String> cached = seatMapCache.get(showId);
+        if (cached.isPresent()) {
+            try {
+                return objectMapper.readValue(cached.get(), SeatMapResponse.class);
+            } catch (JsonProcessingException e) {
+                // 손상된 캐시는 무시하고 DB에서 다시 만든다 — 아래 set이 덮어쓴다
+                log.warn("좌석맵 캐시 역직렬화 실패 — DB로 폴백: {}", e.getMessage());
+            }
+        }
+
         if (!showRepository.existsById(showId)) {
             throw new DomainException(ErrorCode.SHOW_NOT_FOUND);
         }
@@ -99,6 +121,13 @@ public class ShowService {
                         ss.getPrice(),
                         ss.displayStatus(now)))
                 .toList();
-        return new SeatMapResponse(showId, seats);
+        SeatMapResponse response = new SeatMapResponse(showId, seats);
+        try {
+            // 존재하는 회차만 캐시된다 — 404는 위에서 던져져 미스 경로가 캐시를 오염시키지 않는다
+            seatMapCache.set(showId, objectMapper.writeValueAsString(response));
+        } catch (JsonProcessingException e) {
+            log.warn("좌석맵 캐시 직렬화 실패 — 이번 응답은 캐시 없이 반환: {}", e.getMessage());
+        }
+        return response;
     }
 }

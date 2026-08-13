@@ -60,19 +60,23 @@ public class SeatStateRepository {
                 Long.class);
     }
 
+    /** 해제된 좌석 — show_id는 좌석맵 캐시 무효화 대상 식별에 쓴다 */
+    public record ReleasedSeat(long seatId, long showId) {
+    }
+
     /** 선점 해제 — 본인 소유의 HELD만 원복한다. 조건부라 중복 호출·만료 후 호출에도 안전. */
-    public List<Long> releaseByGroup(UUID holdGroupId, long userId) {
-        return jdbc.queryForList("""
+    public List<ReleasedSeat> releaseByGroup(UUID holdGroupId, long userId) {
+        return jdbc.query("""
                 UPDATE show_seats
                    SET status = 'AVAILABLE', hold_user_id = NULL,
                        hold_group_id = NULL, hold_expires_at = NULL
                  WHERE hold_group_id = :groupId AND hold_user_id = :userId AND status = 'HELD'
-                 RETURNING id
+                 RETURNING id, show_id
                 """,
                 new MapSqlParameterSource()
                         .addValue("groupId", holdGroupId)
                         .addValue("userId", userId),
-                Long.class);
+                (rs, i) -> new ReleasedSeat(rs.getLong("id"), rs.getLong("show_id")));
     }
 
     /**
@@ -118,14 +122,15 @@ public class SeatStateRepository {
     /**
      * 만료 선점 일괄 회수 (스위퍼용). 멱등이라 서버 여러 대가 동시에 돌려도 안전하다 —
      * 두 번째 실행은 0건 갱신. WHERE는 부분 인덱스(show_seats_expired_hold_scan_idx,
-     * status='HELD'인 행만 수록)를 탄다.
+     * status='HELD'인 행만 수록)를 탄다. 회수된 회차 id를 돌려줘 캐시 무효화로 잇는다.
      */
-    public int reclaimExpired() {
-        return jdbc.update("""
+    public List<Long> reclaimExpired() {
+        return jdbc.queryForList("""
                 UPDATE show_seats
                    SET status = 'AVAILABLE', hold_user_id = NULL,
                        hold_group_id = NULL, hold_expires_at = NULL
                  WHERE status = 'HELD' AND hold_expires_at < now()
-                """, new MapSqlParameterSource());
+                 RETURNING show_id
+                """, new MapSqlParameterSource(), Long.class);
     }
 }

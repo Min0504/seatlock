@@ -6,6 +6,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -14,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 /**
@@ -33,8 +36,14 @@ public abstract class IntegrationTest {
 
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
+    // 캐시 검증도 실제 Redis 7로 — TTL·DEL의 실동작이 검증 대상이다
+    @SuppressWarnings("resource") // 싱글턴 컨테이너 — Ryuk이 JVM 종료 시 정리한다
+    static final GenericContainer<?> REDIS =
+            new GenericContainer<>("redis:7-alpine").withExposedPorts(6379);
+
     static {
         POSTGRES.start();
+        REDIS.start();
     }
 
     @DynamicPropertySource
@@ -42,6 +51,8 @@ public abstract class IntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("spring.data.redis.host", REDIS::getHost);
+        registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
         // HS256 키는 256bit(32byte) 이상이어야 jjwt가 수용한다
         registry.add("jwt.access-secret", () -> "test-access-secret-must-be-at-least-32-bytes");
         registry.add("jwt.refresh-secret", () -> "test-refresh-secret-must-be-at-least-32-bytes");
@@ -56,12 +67,23 @@ public abstract class IntegrationTest {
     @Autowired
     protected JdbcTemplate jdbc;
 
-    /** 테스트 간 격리 — 시퀀스까지 초기화해 ID 의존 단언이 흔들리지 않게 한다 */
+    @Autowired
+    protected StringRedisTemplate redisTemplate;
+
+    /**
+     * 테스트 간 격리 — 시퀀스까지 초기화해 ID 의존 단언이 흔들리지 않게 한다.
+     * Redis도 함께 비운다: RESTART IDENTITY로 show id가 재사용되므로, 이전 테스트가
+     * 심은 캐시(show:1:seatmap 등)가 남으면 다음 테스트가 남의 좌석맵을 읽는다.
+     */
     protected void truncateAll() {
         jdbc.execute("""
                 TRUNCATE TABLE payments, reservation_seats, reservations, show_seats, shows,
                                performances, seats, venues, refresh_tokens, users
                 RESTART IDENTITY CASCADE""");
+        redisTemplate.execute((RedisConnection conn) -> {
+            conn.serverCommands().flushAll();
+            return null;
+        });
     }
 
     private static final ParameterizedTypeReference<Map<String, Object>> JSON_MAP =

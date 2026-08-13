@@ -2,10 +2,12 @@ package com.seatlock.hold;
 
 import com.seatlock.common.error.DomainException;
 import com.seatlock.common.error.ErrorCode;
+import com.seatlock.hold.SeatStateRepository.ReleasedSeat;
 import com.seatlock.hold.dto.HoldDtos;
 import com.seatlock.hold.dto.HoldDtos.HeldSeat;
 import com.seatlock.hold.dto.HoldDtos.HoldResponse;
 import com.seatlock.hold.dto.HoldDtos.ReleaseResponse;
+import com.seatlock.show.SeatMapCache;
 import com.seatlock.show.Show;
 import com.seatlock.show.ShowRepository;
 import com.seatlock.show.ShowSeat;
@@ -31,6 +33,7 @@ public class HoldService {
     private final ShowRepository showRepository;
     private final ShowSeatRepository showSeatRepository;
     private final SeatStateRepository seatStateRepository;
+    private final SeatMapCache seatMapCache;
 
     /**
      * 좌석 선점 (Nest HoldsService.hold 포팅) — 부분 선점 금지.
@@ -83,15 +86,18 @@ public class HoldService {
                         ss.getSeat().getSeatNo(),
                         ss.getPrice()))
                 .toList();
+        // 커밋 후 무효화 예약 — 롤백되면 실행되지 않는다 (SeatMapCache 주석 참조)
+        seatMapCache.invalidate(showId);
         return new HoldResponse(holdGroupId, expiresAt, heldSeats);
     }
 
     /** 선점 취소 — 본인 소유의 HELD 좌석만 원복한다 (조건부 UPDATE라 중복 호출에도 안전) */
     public ReleaseResponse release(UUID holdGroupId, long userId) {
-        List<Long> released = seatStateRepository.releaseByGroup(holdGroupId, userId);
+        List<ReleasedSeat> released = seatStateRepository.releaseByGroup(holdGroupId, userId);
         if (released.isEmpty()) {
             throw new DomainException(ErrorCode.HOLD_NOT_FOUND);
         }
+        seatMapCache.invalidate(released.get(0).showId());
         return new ReleaseResponse(released.size());
     }
 }

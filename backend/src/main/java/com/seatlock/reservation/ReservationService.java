@@ -13,6 +13,7 @@ import com.seatlock.reservation.dto.ReservationDtos.MyReservationsResponse;
 import com.seatlock.reservation.dto.ReservationDtos.ReservationSummary;
 import com.seatlock.reservation.dto.ReservationDtos.SeatLine;
 import com.seatlock.reservation.dto.ReservationDtos.ShowLine;
+import com.seatlock.show.SeatMapCache;
 import com.seatlock.show.SeatStatus;
 import com.seatlock.show.ShowRepository;
 import com.seatlock.show.ShowSeat;
@@ -50,6 +51,7 @@ public class ReservationService {
     private final ShowSeatRepository showSeatRepository;
     private final ShowRepository showRepository;
     private final MockPgClient pg;
+    private final SeatMapCache seatMapCache;
     private final TransactionTemplate transactionTemplate;
 
     /** 취소 트랜잭션 도중 예매 상태가 바뀐 경우의 내부 신호 — 롤백 후 재판정 트리거 */
@@ -123,10 +125,11 @@ public class ReservationService {
             return new CancelResult(reservationId, ReservationStatus.CANCELED, 0);
         }
 
+        long showId = reservation.getShow().getId();
         if (reservation.getStatus() == ReservationStatus.PENDING) {
-            return cancelPending(userId, reservationId, reservation.getHoldGroupId());
+            return cancelPending(userId, reservationId, reservation.getHoldGroupId(), showId);
         }
-        return cancelConfirmed(reservationId, reservation.getShow().getStartsAt());
+        return cancelConfirmed(reservationId, reservation.getShow().getStartsAt(), showId);
     }
 
     /**
@@ -137,13 +140,13 @@ public class ReservationService {
      * 같은 예매에 결제와 취소가 동시에 달릴 때 서로의 행 잠금을 기다리는
      * 교착(deadlock)이 생길 수 있다 — 잠금 순서 통일이 교착 예방의 기본이다.
      */
-    private CancelResult cancelPending(long userId, long reservationId, UUID holdGroupId) {
-        List<Long> released;
+    private CancelResult cancelPending(long userId, long reservationId, UUID holdGroupId, long showId) {
+        int released;
         try {
-            released = transactionTemplate.execute(tx -> {
-                List<Long> seats = holdGroupId == null
-                        ? List.of()
-                        : seatStateRepository.releaseByGroup(holdGroupId, userId);
+            Integer count = transactionTemplate.execute(tx -> {
+                int seats = holdGroupId == null
+                        ? 0
+                        : seatStateRepository.releaseByGroup(holdGroupId, userId).size();
                 // 그 사이 결제가 확정됐거나(CONFIRMED) 다른 요청이 취소했다 —
                 // 좌석 반납까지 통째로 롤백하고 바깥에서 새 상태 기준으로 재판정한다.
                 // 반대로 이 취소가 이기면, 진행 중이던 결제 승인은 확정 트랜잭션의
@@ -154,14 +157,18 @@ public class ReservationService {
                 }
                 return seats;
             });
+            released = count != null ? count : 0;
         } catch (StateChangedDuringCancel e) {
             return cancel(userId, reservationId);
         }
-        return new CancelResult(reservationId, ReservationStatus.CANCELED, released.size());
+        if (released > 0) {
+            seatMapCache.invalidate(showId);
+        }
+        return new CancelResult(reservationId, ReservationStatus.CANCELED, released);
     }
 
     /** 결제 완료 예매 취소 — 좌석 원복 + 결제 CANCELED + PG 환불(mock) */
-    private CancelResult cancelConfirmed(long reservationId, Instant startsAt) {
+    private CancelResult cancelConfirmed(long reservationId, Instant startsAt, long showId) {
         if (Duration.between(Instant.now(), startsAt).compareTo(CANCEL_DEADLINE) < 0) {
             throw new DomainException(ErrorCode.CANCEL_WINDOW_CLOSED);
         }
@@ -191,6 +198,7 @@ public class ReservationService {
         if (outcome == null) {
             return new CancelResult(reservationId, ReservationStatus.CANCELED, 0);
         }
+        seatMapCache.invalidate(showId);
         // 환불은 DB 확정 후 실행한다. mock PG의 cancel은 멱등이라 재시도에 안전하지만,
         // 실 PG라면 "DB는 취소됐는데 환불 요청이 유실"될 수 있는 지점 — 아웃박스/재시도가
         // 필요한 주제이며 이 포트폴리오에서는 HookRelay가 그 문제를 전담한다.

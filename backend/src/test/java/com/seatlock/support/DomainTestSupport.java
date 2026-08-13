@@ -56,15 +56,23 @@ public abstract class DomainTestSupport extends IntegrationTest {
     }
 
     protected TestUser newUser() {
+        return newUser(Role.USER);
+    }
+
+    protected TestUser newAdmin() {
+        return newUser(Role.ADMIN);
+    }
+
+    private TestUser newUser(Role role) {
         if (sharedHash == null) {
             sharedHash = passwordEncoder.encode("password1234");
         }
         User user = userRepository.save(User.builder()
                 .email("domain" + USER_SEQ.getAndIncrement() + "@test.com")
                 .passwordHash(sharedHash)
-                .role(Role.USER)
+                .role(role)
                 .build());
-        return new TestUser(user.getId(), jwtProvider.issueAccessToken(user.getId(), Role.USER));
+        return new TestUser(user.getId(), jwtProvider.issueAccessToken(user.getId(), role));
     }
 
     /** 좌석 n개짜리 회차 — 티켓 오픈 시각만 바꿔가며 시나리오를 만든다 */

@@ -10,6 +10,7 @@ import com.seatlock.reservation.Reservation;
 import com.seatlock.reservation.ReservationRepository;
 import com.seatlock.reservation.ReservationStateRepository;
 import com.seatlock.reservation.ReservationStatus;
+import com.seatlock.show.SeatMapCache;
 import com.seatlock.show.ShowSeatRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -56,6 +57,7 @@ public class PaymentService {
     private final SeatStateRepository seatStateRepository;
     private final ShowSeatRepository showSeatRepository;
     private final MockPgClient pg;
+    private final SeatMapCache seatMapCache;
     private final TransactionTemplate transactionTemplate;
 
     /** replayed=true면 이번 요청은 결제를 재실행하지 않고 기존 결과를 재생했다 (HTTP 200) */
@@ -218,6 +220,10 @@ public class PaymentService {
         } catch (DomainException e) {
             return compensate(payment, e);
         }
+
+        // 좌석이 RESERVED로 굳었다 — 확정 트랜잭션 커밋 후 좌석맵 캐시를 지운다.
+        // (getId()는 LAZY 프록시 초기화 없이 식별자만 읽는다)
+        seatMapCache.invalidate(reservation.getShow().getId());
 
         // 커밋 후 확정 상태를 다시 읽는다 — 메모리의 payment는 PENDING 시점의 스냅샷이다
         Payment confirmed = paymentRepository.findById(payment.getId()).orElseThrow();

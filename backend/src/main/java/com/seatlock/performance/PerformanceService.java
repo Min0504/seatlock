@@ -1,5 +1,7 @@
 package com.seatlock.performance;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.seatlock.common.error.DomainException;
 import com.seatlock.common.error.ErrorCode;
 import com.seatlock.performance.dto.PerformanceDtos.CreatePerformanceRequest;
@@ -20,12 +22,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class PerformanceService {
@@ -38,6 +43,8 @@ public class PerformanceService {
     private final PerformanceRepository performanceRepository;
     private final ShowRepository showRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final PerformanceListCache listCache;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public CreateVenueResponse createVenue(CreateVenueRequest request) {
@@ -78,6 +85,8 @@ public class PerformanceService {
                 .description(request.description())
                 .venue(venue)
                 .build());
+        // 등록 직후 목록에 보여야 한다 — 커밋 후 첫 페이지 캐시를 지운다
+        listCache.invalidate();
         return new CreatedResponse(performance.getId());
     }
 
@@ -93,9 +102,23 @@ public class PerformanceService {
         return new CreatedResponse(show.getId());
     }
 
-    @Transactional(readOnly = true)
     public ListResponse list(String q, LocalDate date, Long cursor, Integer size) {
         int limit = size != null ? size : DEFAULT_SIZE;
+
+        // 캐시는 "필터 없는 첫 페이지"만 — 메인 진입 시 전원이 때리는 유일한 핫스팟이다.
+        // 검색어·날짜·커서 조합까지 캐시하면 키 수가 폭발하는데 히트율은 바닥이라 실익이 없다.
+        boolean cacheable = q == null && date == null && cursor == null && limit == DEFAULT_SIZE;
+        if (cacheable) {
+            Optional<String> cached = listCache.get();
+            if (cached.isPresent()) {
+                try {
+                    return objectMapper.readValue(cached.get(), ListResponse.class);
+                } catch (JsonProcessingException e) {
+                    log.warn("공연 목록 캐시 역직렬화 실패 — DB로 폴백: {}", e.getMessage());
+                }
+            }
+        }
+
         Instant dayStart = date != null ? date.atStartOfDay(KST).toInstant() : null;
         Instant dayEnd = date != null ? date.plusDays(1).atStartOfDay(KST).toInstant() : null;
 
@@ -104,7 +127,16 @@ public class PerformanceService {
         List<ListItem> items = (hasNext ? rows.subList(0, limit) : rows).stream()
                 .map(r -> new ListItem(r.getId(), r.getTitle(), r.getPosterUrl(), r.getVenueName()))
                 .toList();
-        return new ListResponse(items, hasNext ? String.valueOf(items.get(items.size() - 1).id()) : null);
+        ListResponse response =
+                new ListResponse(items, hasNext ? String.valueOf(items.get(items.size() - 1).id()) : null);
+        if (cacheable) {
+            try {
+                listCache.set(objectMapper.writeValueAsString(response));
+            } catch (JsonProcessingException e) {
+                log.warn("공연 목록 캐시 직렬화 실패 — 이번 응답은 캐시 없이 반환: {}", e.getMessage());
+            }
+        }
+        return response;
     }
 
     @Transactional(readOnly = true)
