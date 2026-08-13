@@ -1,1 +1,3 @@
-out/
+# 시드 산출물 — 벤치 사용자 100명의 JWT가 들어 있어 커밋하지 않는다
+# (측정 결과인 *-summary.json, *.txt는 docs/lock-benchmark.md의 원본 데이터로 보존)
+out/ctx.json
