@@ -1,0 +1,159 @@
+// SeatLock 도메인 스키마 (v1)
+//
+// 모델링 핵심 판단:
+// - seats(물리 좌석)는 공연과 무관한 불변 "템플릿", show_seats는 회차별 "인스턴스".
+//   좌석 정보를 회차마다 복사하지 않기 위한 정규화이며, 판매 상태는 인스턴스에만 존재한다.
+// - "예매 가능 여부"를 별도 재고(inventory) 테이블로 빼지 않고 show_seats.status 한 컬럼으로 관리한다.
+//   좌석제 공연은 좌석 하나가 재고 1이므로 수량 차감 모델이 불필요하고,
+//   상태 전이(AVAILABLE→HELD→RESERVED)가 도메인 그 자체이기 때문.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  RESERVED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+}
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  reservations Reservation[]
+
+  @@map("users")
+}
+
+model Venue {
+  id      BigInt @id @default(autoincrement())
+  name    String @db.VarChar(100)
+  address String @db.VarChar(255)
+
+  seats        Seat[]
+  performances Performance[]
+
+  @@map("venues")
+}
+
+// 물리 좌석 템플릿 — 공연·회차와 무관하게 공연장에 종속
+model Seat {
+  id      BigInt @id @default(autoincrement())
+  venueId BigInt @map("venue_id")
+  section String @db.VarChar(20)
+  rowNo   String @map("row_no") @db.VarChar(10)
+  seatNo  Int    @map("seat_no")
+
+  venue     Venue      @relation(fields: [venueId], references: [id])
+  showSeats ShowSeat[]
+
+  @@unique([venueId, section, rowNo, seatNo])
+  @@map("seats")
+}
+
+model Performance {
+  id          BigInt  @id @default(autoincrement())
+  title       String  @db.VarChar(200)
+  description String?
+  posterUrl   String? @map("poster_url") @db.VarChar(500)
+  venueId     BigInt  @map("venue_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  venue Venue  @relation(fields: [venueId], references: [id])
+  shows Show[]
+
+  @@map("performances")
+}
+
+model Show {
+  id            BigInt   @id @default(autoincrement())
+  performanceId BigInt   @map("performance_id")
+  startsAt      DateTime @map("starts_at") @db.Timestamptz()
+  ticketOpenAt  DateTime @map("ticket_open_at") @db.Timestamptz()
+
+  performance  Performance   @relation(fields: [performanceId], references: [id])
+  showSeats    ShowSeat[]
+  reservations Reservation[]
+
+  @@index([performanceId])
+  @@map("shows")
+}
+
+// 회차별 좌석 인스턴스 — 이 프로젝트의 심장.
+// status 상태 전이(AVAILABLE→HELD→RESERVED)가 곧 도메인 규칙이다.
+model ShowSeat {
+  id            BigInt     @id @default(autoincrement())
+  showId        BigInt     @map("show_id")
+  seatId        BigInt     @map("seat_id")
+  price         Int
+  status        SeatStatus @default(AVAILABLE)
+  holdUserId    BigInt?    @map("hold_user_id")
+  holdGroupId   String?    @map("hold_group_id") @db.Uuid
+  holdExpiresAt DateTime?  @map("hold_expires_at") @db.Timestamptz()
+  // 낙관적 락 실험용(v3 Spring 포팅에서 @Version 비교 대상)
+  version       Int        @default(0)
+
+  show             Show              @relation(fields: [showId], references: [id])
+  seat             Seat              @relation(fields: [seatId], references: [id])
+  reservationSeats ReservationSeat[]
+
+  // 같은 회차에 같은 물리 좌석이 중복 생성되는 것을 스키마 수준에서 차단
+  @@unique([showId, seatId])
+  @@index([holdGroupId])
+  @@map("show_seats")
+}
+
+model Reservation {
+  id         BigInt            @id @default(autoincrement())
+  userId     BigInt            @map("user_id")
+  showId     BigInt            @map("show_id")
+  status     ReservationStatus
+  totalPrice Int               @map("total_price")
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user             User              @relation(fields: [userId], references: [id])
+  show             Show              @relation(fields: [showId], references: [id])
+  reservationSeats ReservationSeat[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("reservations")
+}
+
+model ReservationSeat {
+  id            BigInt  @id @default(autoincrement())
+  reservationId BigInt  @map("reservation_id")
+  showSeatId    BigInt  @map("show_seat_id")
+  canceled      Boolean @default(false)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+  showSeat    ShowSeat    @relation(fields: [showSeatId], references: [id])
+
+  // 주의: 이 테이블에는 Prisma가 표현하지 못하는 부분 유니크 인덱스가 있다
+  // (migration 20260813110200): UNIQUE(show_seat_id) WHERE canceled = false
+  // — 유효 예매 기준 좌석당 1행. 이중 판매의 DB 레벨 최후 방어선.
+  @@index([reservationId])
+  @@map("reservation_seats")
+}
