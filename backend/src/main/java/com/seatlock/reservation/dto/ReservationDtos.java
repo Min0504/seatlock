@@ -27,6 +27,14 @@ public final class ReservationDtos {
     ) {
     }
 
+    public record CancelResult(
+            long id,
+            ReservationStatus status,
+            @Schema(description = "이번 취소로 판매 가능 상태로 되돌린 좌석 수 (반복 취소는 0일 수 있다)")
+            int releasedSeats
+    ) {
+    }
+
     public record SeatLine(String section, String rowNo, int seatNo, int price) {
     }
 

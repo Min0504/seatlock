@@ -99,6 +99,23 @@ public class SeatStateRepository {
     }
 
     /**
+     * 취소된 확정 좌석의 원복 — RESERVED→AVAILABLE.
+     * 취소 직후 신규 선점과의 경합(기획서 장애 시나리오 5): RESERVED인 좌석만 되돌리는
+     * 조건이라 이미 다른 상태로 넘어간 좌석을 덮어쓸 수 없다.
+     */
+    public int restoreReserved(List<Long> seatIds) {
+        if (seatIds.isEmpty()) {
+            return 0;
+        }
+        return jdbc.update("""
+                UPDATE show_seats
+                   SET status = 'AVAILABLE'
+                 WHERE id IN (:seatIds) AND status = 'RESERVED'
+                """,
+                new MapSqlParameterSource().addValue("seatIds", seatIds));
+    }
+
+    /**
      * 만료 선점 일괄 회수 (스위퍼용). 멱등이라 서버 여러 대가 동시에 돌려도 안전하다 —
      * 두 번째 실행은 0건 갱신. WHERE는 부분 인덱스(show_seats_expired_hold_scan_idx,
      * status='HELD'인 행만 수록)를 탄다.

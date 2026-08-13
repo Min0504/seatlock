@@ -49,4 +49,19 @@ public class ReservationStateRepository {
                 });
     }
 
+    /**
+     * 확정 연결의 취소 이력화 — 행 삭제가 아니라 canceled=true 표식.
+     * 부분 유니크 인덱스(WHERE canceled=false)에서 빠지며 좌석 재판매가 열리고,
+     * "언제 어떤 좌석이 취소됐나"가 원장으로 남는다. 반환된 show_seat_id로 좌석 원복을 잇는다.
+     */
+    public List<Long> cancelSeatLinks(long reservationId) {
+        return jdbc.queryForList("""
+                UPDATE reservation_seats
+                   SET canceled = true
+                 WHERE reservation_id = :reservationId AND canceled = false
+                 RETURNING show_seat_id
+                """,
+                new MapSqlParameterSource().addValue("reservationId", reservationId),
+                Long.class);
+    }
 }
