@@ -1,7 +1,6 @@
 import { INestApplication } from '@nestjs/common';
-import { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { httpJson } from './helpers/http';
-import { createTestApp, seedAdmin, seedUsers } from './helpers/test-app';
+import { createTestApp, seedAdmin, seedUsers, teardownTestApp, TestContext } from './helpers/test-app';
 
 interface SeatMapResponse {
   seats: Array<{ id: number; status: string }>;
@@ -17,8 +16,8 @@ interface SeatMapResponse {
  * AVAILABLE로 읽기 때문에 성공이 2건 이상 발생한다(초과판매 재현).
  */
 describe('동일 좌석 동시 선점 — 초과판매 방지 (e2e)', () => {
+  let ctx: TestContext;
   let app: INestApplication;
-  let container: StartedPostgreSqlContainer;
   let base: string;
 
   let showId: number;
@@ -28,9 +27,8 @@ describe('동일 좌석 동시 선점 — 초과판매 방지 (e2e)', () => {
   const userTokens: string[] = [];
 
   beforeAll(async () => {
-    const ctx = await createTestApp();
+    ctx = await createTestApp();
     app = ctx.app;
-    container = ctx.container;
     base = ctx.baseUrl;
 
     const admin = await seedAdmin(app);
@@ -86,8 +84,7 @@ describe('동일 좌석 동시 선점 — 초과판매 방지 (e2e)', () => {
   }, 180000);
 
   afterAll(async () => {
-    await app.close();
-    await container.stop();
+    await teardownTestApp(ctx);
   });
 
   it(`같은 좌석에 ${USERS}명이 동시 선점 요청하면 성공은 정확히 1건이어야 한다`, async () => {

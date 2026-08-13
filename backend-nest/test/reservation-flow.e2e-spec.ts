@@ -1,15 +1,14 @@
 import { INestApplication } from '@nestjs/common';
-import { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import request from 'supertest';
-import { createTestApp, seedAdmin } from './helpers/test-app';
+import { createTestApp, seedAdmin, teardownTestApp, TestContext } from './helpers/test-app';
 
 /**
  * v1 happy path 전 경로 검증:
  * 가입 → 로그인 → (ADMIN) 공연장/공연/회차/좌석 생성 → 좌석맵 → 선점 → 예매 → 내 예매
  */
 describe('예매 전체 흐름 (e2e)', () => {
+  let ctx: TestContext;
   let app: INestApplication;
-  let container: StartedPostgreSqlContainer;
   let server: ReturnType<INestApplication['getHttpServer']>;
 
   let adminToken: string;
@@ -17,9 +16,8 @@ describe('예매 전체 흐름 (e2e)', () => {
   let showId: number;
 
   beforeAll(async () => {
-    const ctx = await createTestApp();
+    ctx = await createTestApp();
     app = ctx.app;
-    container = ctx.container;
     server = app.getHttpServer();
 
     const admin = await seedAdmin(app);
@@ -31,8 +29,7 @@ describe('예매 전체 흐름 (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
-    await container.stop();
+    await teardownTestApp(ctx);
   });
 
   it('회원가입/로그인이 동작하고, 중복 이메일은 409를 반환한다', async () => {

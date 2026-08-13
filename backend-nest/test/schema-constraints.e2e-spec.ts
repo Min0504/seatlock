@@ -1,28 +1,25 @@
 import { INestApplication } from '@nestjs/common';
 import { Prisma, ReservationStatus } from '@prisma/client';
-import { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
 import { PrismaService } from '../src/common/prisma/prisma.service';
-import { createTestApp, seedUsers } from './helpers/test-app';
+import { createTestApp, seedUsers, teardownTestApp, TestContext } from './helpers/test-app';
 
 /**
  * DB 최후 방어선 검증 — 애플리케이션 로직을 우회해 DB에 직접 쓰더라도
  * 부분 유니크 인덱스(reservation_seats_active_unique)가 이중 판매를 막는지 확인한다.
  */
 describe('스키마 제약 — 이중 판매 최후 방어선', () => {
+  let ctx: TestContext;
   let app: INestApplication;
-  let container: StartedPostgreSqlContainer;
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    const ctx = await createTestApp();
+    ctx = await createTestApp();
     app = ctx.app;
-    container = ctx.container;
     prisma = app.get(PrismaService);
   }, 180000);
 
   afterAll(async () => {
-    await app.close();
-    await container.stop();
+    await teardownTestApp(ctx);
   });
 
   it('같은 좌석에 유효 예매 행이 2개 생기는 INSERT는 DB가 거부한다', async () => {
