@@ -69,7 +69,8 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<TestC
 /** 앱과 컨테이너를 역순으로 정리한다 — afterAll 한 줄로 쓰기 위한 헬퍼 */
 export async function teardownTestApp(ctx: TestContext): Promise<void> {
   await ctx.app.close();
-  await Promise.all([ctx.container.stop(), ctx.redis?.stop()]);
+  // 테스트가 이미 컨테이너를 내렸을 수 있다(Redis 다운 시나리오) — 중복 stop 오류는 무시
+  await Promise.allSettled([ctx.container.stop(), ctx.redis?.stop()]);
 }
 
 /** 관리자 계정은 가입 API로 만들 수 없으므로(권한 상승 차단) 테스트에서 직접 심는다 */

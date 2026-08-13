@@ -61,6 +61,9 @@ export class RedisService implements OnModuleDestroy {
       enableOfflineQueue: options.offlineQueue ?? false,
       maxRetriesPerRequest: options.offlineQueue ? null : 1,
       retryStrategy: (times) => Math.min(times * 500, 5_000),
+      // 기본 10초는 죽은 엔드포인트를 너무 오래 붙든다(프로세스 종료 지연의 원인).
+      // 로컬/VPC Redis 기준 2초면 충분하고, 실패는 어차피 재시도가 이어받는다.
+      connectTimeout: 2_000,
     });
     // 'error' 리스너가 없으면 Node가 unhandled error로 프로세스를 죽인다 — 반드시 부착
     conn.on('error', (e: Error) => this.warnThrottled(`연결 오류: ${e.message}`));
@@ -77,11 +80,14 @@ export class RedisService implements OnModuleDestroy {
     }
   }
 
-  async onModuleDestroy(): Promise<void> {
-    // 연결이 이미 끊긴 상태라면 quit이 거부될 수 있다 — 종료 경로에서는 강제 종료로 마무리
-    await Promise.allSettled(this.connections.map((c) => c.quit()));
+  onModuleDestroy(): void {
+    // quit(QUIT 명령 후 응답 대기) 대신 즉시 disconnect한다. 이 앱의 Redis 쓰기는
+    // 전부 best-effort(TTL 키·알림)라 flush를 기다릴 데이터가 없다.
+    // disconnect()는 "재연결 중"인 연결의 진행 중 connect 소켓은 정리하지 않으므로
+    // (Redis가 죽은 채 종료하는 경우 소켓이 connectTimeout까지 잔류), 스트림을 직접 닫는다.
     for (const c of this.connections) {
       c.disconnect();
+      c.stream?.destroy();
     }
   }
 }
