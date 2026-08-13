@@ -48,9 +48,39 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz()
 
-  reservations Reservation[]
+  reservations  Reservation[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
+}
+
+// Refresh Token Rotation의 상태 저장소.
+// Access는 끝까지 stateless(검증 비용 0)로 두고, 수명이 긴 Refresh만 상태를 추적한다 —
+// 검증 비용은 refresh 시점(15분에 1회)에만 발생하는 중간 지점 설계.
+model RefreshToken {
+  id       BigInt @id @default(autoincrement())
+  userId   BigInt @map("user_id")
+  // 로그인 1회 = family 1개. rotation으로 이어지는 토큰들이 같은 familyId를 공유하며,
+  // 재사용(탈취 신호) 탐지 시 이 단위로 전부 폐기한다.
+  familyId String @map("family_id") @db.Uuid
+  // 토큰 원문은 저장하지 않는다(SHA-256) — DB가 유출돼도 세션을 탈취할 수 없다.
+  // UNIQUE가 rotation의 원자성 장치를 겸한다: 같은 토큰의 중복 등록이 불가능하다.
+  tokenHash String @unique @map("token_hash") @db.Char(64)
+  // rotation으로 소모됨 — used 토큰의 재등장 = 정상 사용자와 탈취범이 둘 다 쓴 증거
+  used    Boolean @default(false)
+  // family 폐기(재사용 탐지·로그아웃) 표식
+  revoked   Boolean  @default(false)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id])
+
+  // 재사용 탐지 시 family 일괄 폐기용
+  @@index([familyId])
+  // 만료 행 정리 배치용
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }
 
 model Venue {
