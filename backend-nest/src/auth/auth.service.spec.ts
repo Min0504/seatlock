@@ -14,10 +14,18 @@ describe('AuthService', () => {
       create: jest.fn(),
       findUnique: jest.fn(),
     },
+    refreshToken: {
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
     jest.resetAllMocks();
+    // 토큰 발급은 rotation 상태 행을 남긴다 — 단위 테스트의 관심사가 아니므로 항상 성공 처리
+    prismaMock.refreshToken.create.mockResolvedValue({});
+    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
     const moduleRef = await Test.createTestingModule({
       providers: [
         AuthService,
@@ -94,5 +102,31 @@ describe('AuthService', () => {
     const { accessToken } = await service.login('a@b.com', 'password1234');
 
     await expect(service.refresh(accessToken)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('소모된(used) 토큰이 재사용되면 그 family 전체를 폐기한다', async () => {
+    const passwordHash = await bcrypt.hash('password1234', 4);
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 1n,
+      email: 'a@b.com',
+      passwordHash,
+      role: Role.USER,
+    });
+    const { refreshToken } = await service.login('a@b.com', 'password1234');
+
+    prismaMock.refreshToken.findUnique.mockResolvedValue({
+      id: 10n,
+      userId: 1n,
+      familyId: 'stolen-family',
+      used: true,
+      revoked: false,
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(service.refresh(refreshToken)).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { familyId: 'stolen-family', revoked: false },
+      data: { revoked: true },
+    });
   });
 });

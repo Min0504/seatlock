@@ -1,4 +1,3 @@
-import { INestApplication } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { httpJson } from './helpers/http';
 import { createTestApp, teardownTestApp, TestContext } from './helpers/test-app';
@@ -24,7 +23,6 @@ interface TokenPairResponse {
  */
 describe('Refresh Rotation — 탈취 재사용 탐지 (e2e)', () => {
   let ctx: TestContext;
-  let app: INestApplication;
   let base: string;
 
   let emailSeq = 0;
@@ -47,7 +45,6 @@ describe('Refresh Rotation — 탈취 재사용 탐지 (e2e)', () => {
 
   beforeAll(async () => {
     ctx = await createTestApp();
-    app = ctx.app;
     base = ctx.baseUrl;
   }, 180000);
 
