@@ -27,6 +27,14 @@ public enum ErrorCode {
     SEATS_ALREADY_CREATED(HttpStatus.CONFLICT, "이미 좌석이 생성된 회차입니다."),
     SEAT_NOT_FOUND(HttpStatus.NOT_FOUND, "요청한 좌석을 찾을 수 없습니다."),
 
+    // hold / reservation
+    TICKET_NOT_OPEN(HttpStatus.FORBIDDEN, "아직 예매 오픈 전입니다."),
+    SEAT_ALREADY_TAKEN(HttpStatus.CONFLICT, "이미 선점되었거나 판매된 좌석이 포함되어 있습니다."),
+    HOLD_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "1인당 최대 4석까지 선점할 수 있습니다."),
+    HOLD_NOT_FOUND(HttpStatus.NOT_FOUND, "유효한 선점 내역을 찾을 수 없습니다."),
+    HOLD_EXPIRED(HttpStatus.CONFLICT, "선점 유효시간이 만료되었습니다. 좌석을 다시 선택해 주세요."),
+    RESERVATION_NOT_FOUND(HttpStatus.NOT_FOUND, "예매 내역을 찾을 수 없습니다."),
+
     // common
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "요청 값이 올바르지 않습니다."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");

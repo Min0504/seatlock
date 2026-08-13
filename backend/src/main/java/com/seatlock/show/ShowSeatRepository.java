@@ -1,6 +1,9 @@
 package com.seatlock.show;
 
+import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -20,4 +23,44 @@ public interface ShowSeatRepository extends JpaRepository<ShowSeat, Long> {
     List<ShowSeat> findSeatMapByShowId(@Param("showId") Long showId);
 
     boolean existsByShowId(Long showId);
+
+    /** 선점 대상 검증·응답용 — 좌석 정보까지 fetch join (선점 자체는 SeatStateRepository) */
+    @Query("""
+            SELECT ss FROM ShowSeat ss
+              JOIN FETCH ss.seat
+             WHERE ss.id IN :ids AND ss.showId = :showId
+            """)
+    List<ShowSeat> findAllWithSeat(@Param("ids") Collection<Long> ids, @Param("showId") Long showId);
+
+    /**
+     * 1인 보유 상한 검사용 — 아직 유효한 HELD만 센다 (만료분은 곧 회수될 좌석).
+     * status를 JPQL 열거형 리터럴로 쓰면 Hibernate가 'HELD'::SeatStatus처럼
+     * 따옴표 없는 캐스트를 만들어 PG의 대소문자 구분 타입("SeatStatus")을 못 찾는다 —
+     * 파라미터 바인딩은 컬럼 타입으로 해석되므로 캐스트 자체가 필요 없다.
+     */
+    @Query("""
+            SELECT count(ss) FROM ShowSeat ss
+             WHERE ss.showId = :showId AND ss.holdUserId = :userId
+               AND ss.status = :status
+               AND ss.holdExpiresAt > :now
+            """)
+    long countByUserActiveHolds(
+            @Param("showId") Long showId,
+            @Param("userId") Long userId,
+            @Param("status") SeatStatus status,
+            @Param("now") Instant now);
+
+    default long countActiveHolds(Long showId, Long userId, Instant now) {
+        return countByUserActiveHolds(showId, userId, SeatStatus.HELD, now);
+    }
+
+    List<ShowSeat> findByHoldGroupIdAndHoldUserIdAndStatus(UUID holdGroupId, Long holdUserId, SeatStatus status);
+
+    /** PENDING 예매의 좌석 표시용 — 선점 그룹 일괄 조회 (행마다 조회하면 N+1) */
+    @Query("""
+            SELECT ss FROM ShowSeat ss
+              JOIN FETCH ss.seat
+             WHERE ss.holdGroupId IN :groupIds
+            """)
+    List<ShowSeat> findAllWithSeatByHoldGroupIdIn(@Param("groupIds") Collection<UUID> groupIds);
 }
