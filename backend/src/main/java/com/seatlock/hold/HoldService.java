@@ -15,12 +15,11 @@ import com.seatlock.show.ShowSeatRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +35,20 @@ public class HoldService {
     private final SeatMapCache seatMapCache;
 
     /**
-     * 좌석 선점 (Nest HoldsService.hold 포팅) — 부분 선점 금지.
+     * [실험: 낙관적 락] 좌석 선점 — 잠그지 않고 읽고, 커밋 때 버전으로 판정한다.
      *
-     * 트랜잭션 경계가 곧 "전부 아니면 전무"다: 조건부 UPDATE가 요청 좌석 일부만
-     * 이기면 예외를 던져 이긴 좌석까지 롤백한다. "2좌석 중 1좌석만 잡힘"은
-     * 사용자에게 최악의 상태이기 때문이다.
+     * 본선(조건부 UPDATE)과의 구조 차이:
+     * - 읽기 시점에는 아무 잠금이 없다. flush되는 UPDATE에 JPA가
+     *   "WHERE version = 읽은값"을 붙이고, 그 사이 누가 먼저 커밋했으면 갱신
+     *   0건 → OptimisticLockException. "충돌은 드물다"에 베팅하는 전략이다.
+     * - 티케팅은 그 베팅이 정확히 반대로 걸리는 도메인이다 — 인기 좌석은 충돌이
+     *   기본값이라, 패자들이 트랜잭션을 끝까지 실행하고 나서야 실패를 안다
+     *   (헛수고 비용). 읽기 위주·충돌 희귀 도메인(마이페이지 수정 등)에서 빛난다.
+     * - flush를 메서드 안에서 명시 호출하는 이유: 기본 flush는 커밋 시점(트랜잭션
+     *   프록시 내부)이라 예외가 서비스 밖에서 터져 500이 된다. 안에서 flush해야
+     *   버전 충돌을 도메인 에러(409)로 번역할 수 있다.
+     *
+     * 측정 결과와 트레이드오프 분석: docs/lock-benchmark.md
      */
     @Transactional
     public HoldResponse hold(Long showId, long userId, List<Long> seatIds) {
@@ -58,23 +66,33 @@ public class HoldService {
             throw new DomainException(ErrorCode.SEAT_NOT_FOUND);
         }
 
-        // 1인 보유 상한 — UX 규칙이라 근사 검증으로 충분하다(초과판매처럼 돈이 걸린
-        // 불변식이 아니므로 이 검사와 아래 UPDATE 사이의 race는 수용한다)
+        // 1인 보유 상한 — UX 규칙이라 근사 검증으로 충분하다
         long activeHolds = showSeatRepository.countActiveHolds(showId, userId, now);
         if (activeHolds + seatIds.size() > HoldDtos.MAX_SEATS_PER_HOLD) {
             throw new DomainException(ErrorCode.HOLD_LIMIT_EXCEEDED);
         }
 
+        // 1차 검사 — 이미 남의 좌석인 것은 버전 충돌까지 갈 것 없이 여기서 걸러
+        // 실패 좌석을 details로 알린다 (경합이 아니라 확정된 사실이므로)
+        List<Long> taken = seats.stream()
+                .filter(ss -> !ss.holdable(now))
+                .map(ShowSeat::getId)
+                .toList();
+        if (!taken.isEmpty()) {
+            throw new DomainException(ErrorCode.SEAT_ALREADY_TAKEN, Map.<String, Object>of("seatIds", taken));
+        }
+
         UUID holdGroupId = UUID.randomUUID();
         Instant expiresAt = now.plus(HOLD_TTL);
-        Set<Long> won = new HashSet<>(
-                seatStateRepository.acquire(showId, seatIds, userId, holdGroupId, expiresAt));
-
-        if (won.size() != seatIds.size()) {
-            // 하나라도 선점 실패 → 예외로 전체 롤백. 실패 좌석을 details로 알려
-            // 클라이언트가 해당 좌석만 다시 고르게 한다.
-            List<Long> taken = seatIds.stream().filter(id -> !won.contains(id)).toList();
-            throw new DomainException(ErrorCode.SEAT_ALREADY_TAKEN, Map.<String, Object>of("seatIds", taken));
+        seats.forEach(ss -> ss.applyHold(userId, holdGroupId, expiresAt));
+        try {
+            // 진짜 판정은 여기다: UPDATE ... WHERE version = 읽은값.
+            // 읽기와 flush 사이에 다른 트랜잭션이 커밋했다면 갱신 0건 → 예외.
+            showSeatRepository.flush();
+        } catch (OptimisticLockingFailureException e) {
+            // 경합 패배 — 전체 롤백(부분 선점 금지). 어느 좌석이 충돌했는지는
+            // 예외가 알려주지 않으므로 details 없이 409만 반환한다.
+            throw new DomainException(ErrorCode.SEAT_ALREADY_TAKEN);
         }
 
         List<HeldSeat> heldSeats = seats.stream()

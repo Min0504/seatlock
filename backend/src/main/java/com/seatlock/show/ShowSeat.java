@@ -13,6 +13,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -66,10 +67,15 @@ public class ShowSeat {
     @Column(name = "hold_expires_at")
     private Instant holdExpiresAt;
 
-    // 낙관적 락 실험용 컬럼. 의도적으로 @Version을 붙이지 않았다 —
-    // @Version은 이 엔티티의 모든 JPA UPDATE에 버전 검사를 강제하는데, 본선 설계는
-    // 조건부 UPDATE(WHERE status='AVAILABLE')가 원자성을 책임진다.
-    // @Version 활성화는 experiment/optimistic-lock 브랜치에서만 한다 (기획서 §7 문제 1).
+    // [실험 브랜치] @Version 활성화 — JPA가 이 엔티티의 모든 UPDATE에
+    // "WHERE version = 읽은값"을 덧붙이고 version을 +1 한다. 갱신 0건이면
+    // 다른 트랜잭션이 먼저 커밋한 것 — OptimisticLockException으로 드러난다.
+    //
+    // 한계(정직하게): 이 브랜치에서도 해제·스위퍼·결제 확정은 본선의 원시 SQL
+    // 경로라 version을 증가시키지 않는다. 낙관적 보호 범위는 "hold 경로끼리의
+    // 경합"으로 한정된다 — 전 경로 낙관적 전환은 원시 SQL 전부를 엔티티 갱신으로
+    // 바꿔야 하며, 그 비용 자체가 이 전략의 단점 목록에 들어간다.
+    @Version
     @Column(nullable = false)
     private int version;
 
@@ -79,5 +85,23 @@ public class ShowSeat {
                 && holdExpiresAt != null
                 && !holdExpiresAt.isAfter(now);
         return expiredHold ? SeatStatus.AVAILABLE : status;
+    }
+
+    /** [실험 브랜치 전용] 이 좌석을 지금 선점할 수 있는가 — 빈 좌석 또는 만료된 선점 */
+    public boolean holdable(Instant now) {
+        return status == SeatStatus.AVAILABLE
+                || (status == SeatStatus.HELD && holdExpiresAt != null && !holdExpiresAt.isAfter(now));
+    }
+
+    /**
+     * [실험 브랜치 전용] 엔티티 변경 감지(dirty checking) 경로의 선점 상태 전이.
+     * 커밋 시 flush되는 UPDATE에 @Version 검사가 자동으로 붙는다 —
+     * "읽은 뒤 아무도 안 건드렸다"가 성립할 때만 성공한다.
+     */
+    public void applyHold(long userId, UUID groupId, Instant expiresAt) {
+        this.status = SeatStatus.HELD;
+        this.holdUserId = userId;
+        this.holdGroupId = groupId;
+        this.holdExpiresAt = expiresAt;
     }
 }
