@@ -9,6 +9,7 @@ import { validateEnv } from './common/config/env.validation';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { RedisModule } from './common/redis/redis.module';
 import { HoldsModule } from './holds/holds.module';
+import { PaymentsModule } from './payments/payments.module';
 import { PerformancesModule } from './performances/performances.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { ShowsModule } from './shows/shows.module';
@@ -24,6 +25,7 @@ import { ShowsModule } from './shows/shows.module';
     ShowsModule,
     HoldsModule,
     ReservationsModule,
+    PaymentsModule,
   ],
   providers: [
     // 인증을 기본값(deny-by-default)으로 두고 공개 라우트만 @Public으로 여는 구조 —

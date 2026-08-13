@@ -14,6 +14,7 @@ describe('예매 전체 흐름 (e2e)', () => {
   let adminToken: string;
   let userToken: string;
   let showId: number;
+  let reservationId: number;
 
   beforeAll(async () => {
     ctx = await createTestApp();
@@ -148,6 +149,7 @@ describe('예매 전체 흐름 (e2e)', () => {
     expect(reservation.body.totalPrice).toBe(300000);
     expect(reservation.body.status).toBe('PENDING');
     expect(reservation.body.payUntil).toBeTruthy();
+    reservationId = reservation.body.id;
 
     // 같은 선점으로 다시 생성해도 새 예매가 생기지 않는다 (부분 유니크 → 기존 반환)
     const dupReservation = await request(server)
@@ -169,6 +171,40 @@ describe('예매 전체 흐름 (e2e)', () => {
     const afterMap = await request(server).get(`/shows/${showId}/seats`).expect(200);
     const held = afterMap.body.seats.filter((s: { status: string }) => s.status === 'HELD');
     expect(held).toHaveLength(2);
+  });
+
+  it('결제(멱등 키)하면 예매가 CONFIRMED, 좌석이 RESERVED로 전이된다', async () => {
+    const idempotencyKey = crypto.randomUUID();
+    const pay = await request(server)
+      .post('/payments')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ reservationId, method: 'CARD' })
+      .expect(201);
+    expect(pay.body.status).toBe('APPROVED');
+    expect(pay.body.amount).toBe(300000);
+    expect(pay.body.pgTxId).toBeTruthy();
+
+    // 같은 키 재요청 = 재실행 없이 첫 결과를 200으로 재생 (더블클릭·네트워크 재시도 안전)
+    const replay = await request(server)
+      .post('/payments')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ reservationId, method: 'CARD' })
+      .expect(200);
+    expect(replay.body.paymentId).toBe(pay.body.paymentId);
+    expect(replay.body.pgTxId).toBe(pay.body.pgTxId);
+
+    const mine = await request(server)
+      .get('/me/reservations')
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect(mine.body.items[0].status).toBe('CONFIRMED');
+    expect(mine.body.items[0].seats).toHaveLength(2);
+
+    const afterMap = await request(server).get(`/shows/${showId}/seats`).expect(200);
+    const reserved = afterMap.body.seats.filter((s: { status: string }) => s.status === 'RESERVED');
+    expect(reserved).toHaveLength(2);
   });
 
   it('선점 취소 시 좌석이 AVAILABLE로 돌아온다', async () => {
