@@ -33,6 +33,13 @@ enum ReservationStatus {
   CANCELED
 }
 
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  FAILED
+  CANCELED
+}
+
 model User {
   id           BigInt   @id @default(autoincrement())
   email        String   @unique @db.VarChar(255)
@@ -134,15 +141,47 @@ model Reservation {
   showId     BigInt            @map("show_id")
   status     ReservationStatus
   totalPrice Int               @map("total_price")
+  // PENDING 단계의 좌석 참조 — 좌석-예매의 확정 연결(reservation_seats)은 결제
+  // 승인 시점에 생긴다. 선점이 만료되면 이 참조만 죽고 아무 제약도 걸리지 않는다.
+  holdGroupId String?          @map("hold_group_id") @db.Uuid
+  // 결제 확정 시 "선점 그대로 전부" 전이됐는지 검증하는 기준(부분 확정 방지)
+  seatCount  Int               @map("seat_count")
   createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz()
 
   user             User              @relation(fields: [userId], references: [id])
   show             Show              @relation(fields: [showId], references: [id])
   reservationSeats ReservationSeat[]
+  payments         Payment[]
 
+  // 주의: 부분 유니크 인덱스(마이그레이션 수동 작성):
+  // UNIQUE(hold_group_id) WHERE status='PENDING' — 같은 선점으로 미결제 예매 중복 생성 차단
   @@index([userId, createdAt(sort: Desc)])
   @@map("reservations")
+}
+
+model Payment {
+  id             BigInt        @id @default(autoincrement())
+  reservationId  BigInt        @map("reservation_id")
+  // 이중 결제 차단의 핵심 — 클라이언트가 생성한 UUID를 UNIQUE 제약으로 선점한다
+  idempotencyKey String        @unique @map("idempotency_key") @db.Uuid
+  // 같은 키 + 다른 바디(422 IDEMPOTENCY_KEY_MISMATCH) 판정용 요청 지문
+  requestHash    String        @map("request_hash") @db.VarChar(64)
+  status         PaymentStatus
+  pgTxId         String?       @map("pg_tx_id") @db.VarChar(100)
+  // 서버가 예매 금액으로 계산한 값 — 클라이언트 전달 금액은 신뢰하지 않는다
+  amount         Int
+  method         String        @db.VarChar(20)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz()
+
+  reservation Reservation @relation(fields: [reservationId], references: [id])
+
+  // 주의: 부분 유니크 인덱스(마이그레이션 수동 작성):
+  // UNIQUE(reservation_id) WHERE status IN ('PENDING','APPROVED')
+  // — 예매 1건당 "유효한" 결제 1건. FAILED/CANCELED 후 새 키 재시도는 허용된다.
+  @@index([reservationId])
+  @@map("payments")
 }
 
 model ReservationSeat {

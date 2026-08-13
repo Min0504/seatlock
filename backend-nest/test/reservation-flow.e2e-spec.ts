@@ -14,6 +14,7 @@ describe('예매 전체 흐름 (e2e)', () => {
   let adminToken: string;
   let userToken: string;
   let showId: number;
+  let reservationId: number;
 
   beforeAll(async () => {
     ctx = await createTestApp();
@@ -118,7 +119,7 @@ describe('예매 전체 흐름 (e2e)', () => {
     expect(seatMap.body.seats.every((s: { status: string }) => s.status === 'AVAILABLE')).toBe(true);
   });
 
-  it('선점 → 예매 → 내 예매 조회까지 완료된다', async () => {
+  it('선점 → 예매(미결제) → 내 예매 조회까지 완료된다', async () => {
     const seatMap = await request(server).get(`/shows/${showId}/seats`).expect(200);
     const seatIds = seatMap.body.seats
       .filter((s: { section: string }) => s.section === 'A')
@@ -139,12 +140,24 @@ describe('예매 전체 흐름 (e2e)', () => {
       .expect(409);
     expect(conflict.body.code).toBe('SEAT_ALREADY_TAKEN');
 
+    // 예매 생성 = 미결제(PENDING) 단계 — 좌석 확정은 결제 승인 시점이다
     const reservation = await request(server)
       .post('/reservations')
       .set('Authorization', `Bearer ${userToken}`)
       .send({ holdGroupId: hold.body.holdGroupId })
       .expect(201);
     expect(reservation.body.totalPrice).toBe(300000);
+    expect(reservation.body.status).toBe('PENDING');
+    expect(reservation.body.payUntil).toBeTruthy();
+    reservationId = reservation.body.id;
+
+    // 같은 선점으로 다시 생성해도 새 예매가 생기지 않는다 (부분 유니크 → 기존 반환)
+    const dupReservation = await request(server)
+      .post('/reservations')
+      .set('Authorization', `Bearer ${userToken}`)
+      .send({ holdGroupId: hold.body.holdGroupId })
+      .expect(201);
+    expect(dupReservation.body.id).toBe(reservation.body.id);
 
     const mine = await request(server)
       .get('/me/reservations')
@@ -152,9 +165,43 @@ describe('예매 전체 흐름 (e2e)', () => {
       .expect(200);
     expect(mine.body.items).toHaveLength(1);
     expect(mine.body.items[0].seats).toHaveLength(2);
-    expect(mine.body.items[0].status).toBe('CONFIRMED');
+    expect(mine.body.items[0].status).toBe('PENDING');
 
-    // 예매 완료 좌석은 좌석맵에서 RESERVED로 보인다
+    // 결제 전이므로 좌석은 여전히 HELD다 (RESERVED 전이는 결제 승인 때)
+    const afterMap = await request(server).get(`/shows/${showId}/seats`).expect(200);
+    const held = afterMap.body.seats.filter((s: { status: string }) => s.status === 'HELD');
+    expect(held).toHaveLength(2);
+  });
+
+  it('결제(멱등 키)하면 예매가 CONFIRMED, 좌석이 RESERVED로 전이된다', async () => {
+    const idempotencyKey = crypto.randomUUID();
+    const pay = await request(server)
+      .post('/payments')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ reservationId, method: 'CARD' })
+      .expect(201);
+    expect(pay.body.status).toBe('APPROVED');
+    expect(pay.body.amount).toBe(300000);
+    expect(pay.body.pgTxId).toBeTruthy();
+
+    // 같은 키 재요청 = 재실행 없이 첫 결과를 200으로 재생 (더블클릭·네트워크 재시도 안전)
+    const replay = await request(server)
+      .post('/payments')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('Idempotency-Key', idempotencyKey)
+      .send({ reservationId, method: 'CARD' })
+      .expect(200);
+    expect(replay.body.paymentId).toBe(pay.body.paymentId);
+    expect(replay.body.pgTxId).toBe(pay.body.pgTxId);
+
+    const mine = await request(server)
+      .get('/me/reservations')
+      .set('Authorization', `Bearer ${userToken}`)
+      .expect(200);
+    expect(mine.body.items[0].status).toBe('CONFIRMED');
+    expect(mine.body.items[0].seats).toHaveLength(2);
+
     const afterMap = await request(server).get(`/shows/${showId}/seats`).expect(200);
     const reserved = afterMap.body.seats.filter((s: { status: string }) => s.status === 'RESERVED');
     expect(reserved).toHaveLength(2);

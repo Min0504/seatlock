@@ -44,4 +44,24 @@ export const Errors = {
     new DomainException(409, 'HOLD_EXPIRED', '선점 유효시간이 만료되었습니다. 좌석을 다시 선택해 주세요.'),
   reservationNotFound: (): DomainException =>
     new DomainException(404, 'RESERVATION_NOT_FOUND', '예매 내역을 찾을 수 없습니다.'),
+
+  // payment
+  idempotencyKeyRequired: (): DomainException =>
+    new DomainException(400, 'IDEMPOTENCY_KEY_REQUIRED', 'Idempotency-Key 헤더(UUID)가 필요합니다.'),
+  idempotencyKeyMismatch: (): DomainException =>
+    new DomainException(
+      422,
+      'IDEMPOTENCY_KEY_MISMATCH',
+      '같은 Idempotency-Key로 다른 내용의 요청이 들어왔습니다. 새 키로 요청해 주세요.',
+    ),
+  paymentInProgress: (): DomainException =>
+    new DomainException(409, 'PAYMENT_IN_PROGRESS', '같은 결제가 처리 중입니다. 잠시 후 같은 키로 다시 시도해 주세요.'),
+  paymentFailed: (): DomainException =>
+    new DomainException(402, 'PAYMENT_FAILED', '결제가 승인되지 않았습니다. 새 키로 다시 시도해 주세요.'),
+  alreadyPaid: (): DomainException =>
+    new DomainException(409, 'ALREADY_PAID', '이미 결제가 완료된 예매입니다.'),
+  reservationNotPayable: (): DomainException =>
+    new DomainException(409, 'RESERVATION_NOT_PAYABLE', '결제할 수 없는 상태의 예매입니다.'),
+  cancelWindowClosed: (): DomainException =>
+    new DomainException(409, 'CANCEL_WINDOW_CLOSED', '공연 시작 24시간 전까지만 취소할 수 있습니다.'),
 } as const;
