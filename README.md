@@ -9,8 +9,11 @@
 | 검증 항목 | 결과 |
 |-----------|------|
 | 동시 100명이 같은 좌석 선점 | **성공 정확히 1건, 초과판매 0** (통합 테스트로 강제) |
+| **1,000 VU × 좌석 10** | **성공 정확히 10, 409 990, 5xx 0** — [k6](docs/perf/k6.md) |
 | 락 전략 4종 부하 비교 (k6) | 조건부 UPDATE p95 **34ms** vs 비관적 락 52ms·컨보이 929ms — [분석](docs/lock-benchmark.md) |
-| 결제 멱등성 | 같은 키 연타 → 결제 1건 (10개 시나리오 테스트: 재생·422·동시 409·PG 타임아웃 복구·보상) |
+| 좌석맵 200 RPS | 캐시 HIT p95 **18ms** / Redis 다운 폴백 p95 **688ms** (200 100%, 기능 유지) |
+| 결제 멱등 동시 50 | 실행 **1건**, `payments` 행 1, 나머지 409 |
+| 결제 멱등성 (테스트) | 같은 키 연타 → 결제 1건 (10개 시나리오: 재생·422·동시 409·PG 타임아웃 복구·보상) |
 | 통합 테스트 | Spring 44개 + Nest e2e 전체 — 실 PostgreSQL 16·Redis 7 (Testcontainers) |
 
 ## 빠른 실행
@@ -33,6 +36,7 @@ Swagger: <http://localhost:18080/docs> · 관리자 `admin@seatlock.io` / `passw
 | Refresh 토큰 탈취 | **Rotation + 재사용 탐지** — 소모된 토큰 재사용 시 로그인 단위(family) 전체 폐기 | [#5](../../pull/5) |
 | 오픈 순간 조회 폭주 | 좌석맵 Redis 캐시(TTL 5s) + **커밋 후 무효화**, pg_trgm 검색, 통계 캐시 | [#6](../../pull/6) |
 | "다른 락이면 어땠을까" | 비관적·낙관적·Redis 분산락을 **전부 구현해 k6로 측정** — 채택 근거를 수치로 | [#9](../../pull/9) · [docs/lock-benchmark.md](docs/lock-benchmark.md) |
+| 오픈 순간 1,000명이 10석에 몰림 · Redis 다운 · 풀 고갈 | k6로 초과판매 0 증명, 캐시 폴백 200, Hikari 3초 타임아웃 후 503 | [k6](docs/perf/k6.md) · [incident](docs/incident/) |
 
 ## 락 전략 비교 — 이 프로젝트의 중심 실험
 
@@ -65,6 +69,9 @@ seatlock/
 |------|------|
 | [docs/architecture.md](docs/architecture.md) | ERD, 좌석 상태 기계, 결제 시퀀스와 트랜잭션 경계, 3중 만료 방어, Spring↔Nest 모듈 맵 |
 | [docs/lock-benchmark.md](docs/lock-benchmark.md) | 락 4종 벤치마크 — 방법론(한계 포함), 결과, 전략별 분석, 채택 근거 |
+| [docs/perf/k6.md](docs/perf/k6.md) | 기획서 §8 k6 3종 — 초과판매 0, 좌석맵 캐시, 결제 멱등 + 풀 고갈 |
+| [docs/incident/redis-down.md](docs/incident/redis-down.md) | Redis 다운 카오스 — 좌석맵 200·선점 201 |
+| [docs/incident/connection-pool.md](docs/incident/connection-pool.md) | Hikari 풀 고갈 → 503, timeout 3초 근거 |
 | [docs/기획서.md](docs/기획서.md) | 전체 기획 — 문제 정의, 설계 판단 기록, 로드맵 |
 
 ## 개발
@@ -85,6 +92,7 @@ cd frontend && npm ci && npm run dev  # :5173, /api → :8080 프록시
 
 # 락 벤치마크 재현
 bench/run.sh conditional-update       # 브랜치 체크아웃 후 라벨만 바꿔 반복
+./bench/run-v4.sh                     # 기획서 §8 k6 3종 + Redis 카오스 + 풀 고갈
 ```
 
 기여 규칙: 핵심 문제 1개 = 브랜치 1개 = PR 1개, **CI 초록 없이 머지 금지**, 백엔드 커밋은 1커밋 = 1개념.

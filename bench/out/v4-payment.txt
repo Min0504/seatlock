@@ -1,0 +1,53 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: bench/payment-idem.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 50 max VUs, 1m0s max duration (incl. graceful stop):
+              * storm: 1 iterations for each of 50 VUs (maxDuration: 30s, gracefulStop: 30s)
+
+
+
+  █ THRESHOLDS 
+
+    pay_created
+    ✓ 'count==1' count=1
+
+    pay_error
+    ✓ 'count==0' count=0
+
+
+  █ TOTAL RESULTS 
+
+    CUSTOM
+    pay_created....................: 1      9.324183/s
+    pay_error......................: 0      0/s
+    pay_in_progress................: 49     456.884977/s
+    pay_latency....................: avg=73.35ms  med=73.06ms  p(95)=83.61ms  p(99)=97.61ms  max=101.79ms
+
+    HTTP
+    http_req_duration..............: avg=73.35ms  med=73.06ms  p(95)=83.61ms  p(99)=97.61ms  max=101.79ms
+      { expected_response:true }...: avg=101.79ms med=101.79ms p(95)=101.79ms p(99)=101.79ms max=101.79ms
+    http_req_failed................: 98.00% 49 out of 50
+    http_reqs......................: 50     466.20916/s
+
+    EXECUTION
+    iteration_duration.............: avg=77.6ms   med=77.67ms  p(95)=87.43ms  p(99)=101.97ms max=106.92ms
+    iterations.....................: 50     466.20916/s
+
+    NETWORK
+    data_received..................: 21 kB  200 kB/s
+    data_sent......................: 20 kB  189 kB/s
+
+
+
+
+running (0m00.1s), 00/50 VUs, 50 complete and 0 interrupted iterations
+storm ✓ [ 100% ] 50 VUs  00.1s/30s  50/50 iters, 1 per VU
