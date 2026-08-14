@@ -36,6 +36,7 @@ Swagger: <http://localhost:18080/docs> · 관리자 `admin@seatlock.io` / `passw
 | Refresh 토큰 탈취 | **Rotation + 재사용 탐지** — 소모된 토큰 재사용 시 로그인 단위(family) 전체 폐기 | [#5](../../pull/5) |
 | 오픈 순간 조회 폭주 | 좌석맵 Redis 캐시(TTL 5s) + **커밋 후 무효화**, pg_trgm 검색, 통계 캐시 | [#6](../../pull/6) |
 | "다른 락이면 어땠을까" | 비관적·낙관적·Redis 분산락을 **전부 구현해 k6로 측정** — 채택 근거를 수치로 | [#9](../../pull/9) · [docs/lock-benchmark.md](docs/lock-benchmark.md) |
+| 오픈 순간 1,000명이 10석에 몰림 · Redis 다운 · 풀 고갈 | k6로 초과판매 0 증명, 캐시 폴백 200, Hikari 3초 타임아웃 후 503 | [k6](docs/perf/k6.md) · [incident](docs/incident/) |
 
 ## 락 전략 비교 — 이 프로젝트의 중심 실험
 
