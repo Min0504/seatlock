@@ -3,8 +3,8 @@ package com.seatlock.common.cache;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Optional;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -17,15 +17,28 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * Redis 순단·타임아웃은 "캐시 없이 DB 직행"(성능 저하)으로 강등될 뿐
  * API 실패로 번지면 안 된다. 좌석 선점·결제의 정합성은 애초에 캐시가 아니라
  * DB 조건부 UPDATE가 지키므로 이 강등은 기능 손실이 없다.
+ *
+ * {@code CACHE_ENABLED=false}는 부하 비교용이다. Redis를 죽여 측정하면 연결
+ * 타임아웃(300ms)이 지연에 섞여 "캐시 없음"이 아니라 "캐시 장애"를 재게 된다.
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class CacheClient {
 
     private final StringRedisTemplate redis;
+    private final boolean enabled;
+
+    public CacheClient(
+            StringRedisTemplate redis,
+            @Value("${seatlock.cache.enabled:true}") boolean enabled) {
+        this.redis = redis;
+        this.enabled = enabled;
+    }
 
     public Optional<String> tryGet(String label, String key) {
+        if (!enabled) {
+            return Optional.empty();
+        }
         try {
             return Optional.ofNullable(redis.opsForValue().get(key));
         } catch (RuntimeException e) {
@@ -35,6 +48,9 @@ public class CacheClient {
     }
 
     public void trySet(String label, String key, String value, Duration ttl) {
+        if (!enabled) {
+            return;
+        }
         try {
             redis.opsForValue().set(key, value, ttl);
         } catch (RuntimeException e) {
@@ -43,7 +59,7 @@ public class CacheClient {
     }
 
     public void tryDelete(String label, String... keys) {
-        if (keys.length == 0) {
+        if (!enabled || keys.length == 0) {
             return;
         }
         try {

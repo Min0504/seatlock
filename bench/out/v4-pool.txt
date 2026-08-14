@@ -1,0 +1,54 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: bench/pool-exhaust.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 300 max VUs, 50s max duration (incl. graceful stop):
+              * burst: 1 iterations for each of 300 VUs (maxDuration: 20s, gracefulStop: 30s)
+
+
+running (00.9s), 043/300 VUs, 257 complete and 0 interrupted iterations
+burst   [  86% ] 300 VUs  00.9s/20s  257/300 iters, 1 per VU
+
+
+  █ THRESHOLDS 
+
+    pool_503
+    ✓ 'count>0' count=99
+
+
+  █ TOTAL RESULTS 
+
+    CUSTOM
+    pool_503.......................: 99     86.70862/s
+    pool_latency...................: avg=663.05ms med=688.91ms p(95)=853.73ms max=1.06s   
+    pool_ok........................: 201    176.044773/s
+
+    HTTP
+    http_req_duration..............: avg=663.05ms med=688.91ms p(95)=853.73ms max=1.06s   
+      { expected_response:true }...: avg=531.45ms med=511.23ms p(95)=753.45ms max=812.14ms
+    http_req_failed................: 73.33% 220 out of 300
+    http_reqs......................: 300    262.753393/s
+
+    EXECUTION
+    iteration_duration.............: avg=705.57ms med=725.87ms p(95)=932.67ms max=1.13s   
+    iterations.....................: 300    262.753393/s
+    vus............................: 43     min=43         max=43 
+    vus_max........................: 300    min=300        max=300
+
+    NETWORK
+    data_received..................: 135 kB 118 kB/s
+    data_sent......................: 102 kB 89 kB/s
+
+
+
+
+running (01.1s), 000/300 VUs, 300 complete and 0 interrupted iterations
+burst ✓ [ 100% ] 300 VUs  01.1s/20s  300/300 iters, 1 per VU

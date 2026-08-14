@@ -9,6 +9,11 @@ spring:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:55432/seatlock_spring}
     username: ${DATABASE_USERNAME:seatlock}
     password: ${DATABASE_PASSWORD:seatlock}
+    hikari:
+      # 기본 10. 오픈 순간 대기가 무한히 늘지 않도록 3초 안에 못 받으면 503
+      # (기획서 §10 장애 3). 풀을 키우는 근거는 docs/incident/connection-pool.md.
+      maximum-pool-size: ${HIKARI_MAX_POOL:10}
+      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT_MS:3000}
 
   jpa:
     hibernate:
@@ -48,6 +53,11 @@ springdoc:
 
 server:
   port: ${PORT:8080}
+
+seatlock:
+  cache:
+    # 부하 비교용. false면 Redis를 아예 안 탄다 (장애 주입의 300ms 타임아웃과 분리)
+    enabled: ${CACHE_ENABLED:true}
 
 logging:
   level:

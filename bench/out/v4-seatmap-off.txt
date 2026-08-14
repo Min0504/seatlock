@@ -1,0 +1,105 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+
+     execution: local
+        script: bench/seatmap.js
+        output: -
+
+     scenarios: (100.00%) 1 scenario, 200 max VUs, 45s max duration (incl. graceful stop):
+              * read: 200.00 iterations/s for 15s (maxVUs: 50-200, gracefulStop: 30s)
+
+
+running (01.0s), 059/059 VUs, 0 complete and 0 interrupted iterations
+read   [   2% ] 059/059 VUs  00.3s/15s  200.00 iters/s
+
+running (02.0s), 103/106 VUs, 110 complete and 0 interrupted iterations
+read   [   9% ] 103/106 VUs  01.3s/15s  200.00 iters/s
+
+running (03.0s), 116/118 VUs, 285 complete and 0 interrupted iterations
+read   [  16% ] 116/118 VUs  02.3s/15s  200.00 iters/s
+
+running (04.0s), 121/122 VUs, 476 complete and 0 interrupted iterations
+read   [  22% ] 121/122 VUs  03.3s/15s  200.00 iters/s
+
+running (05.0s), 120/133 VUs, 650 complete and 0 interrupted iterations
+read   [  29% ] 120/133 VUs  04.3s/15s  200.00 iters/s
+
+running (06.0s), 123/133 VUs, 847 complete and 0 interrupted iterations
+read   [  36% ] 123/133 VUs  05.3s/15s  200.00 iters/s
+
+running (07.0s), 122/133 VUs, 1048 complete and 0 interrupted iterations
+read   [  42% ] 122/133 VUs  06.3s/15s  200.00 iters/s
+
+running (08.0s), 128/139 VUs, 1226 complete and 0 interrupted iterations
+read   [  49% ] 128/139 VUs  07.3s/15s  200.00 iters/s
+
+running (09.0s), 122/139 VUs, 1432 complete and 0 interrupted iterations
+read   [  56% ] 122/139 VUs  08.3s/15s  200.00 iters/s
+
+running (10.0s), 124/139 VUs, 1630 complete and 0 interrupted iterations
+read   [  62% ] 124/139 VUs  09.3s/15s  200.00 iters/s
+
+running (11.0s), 125/139 VUs, 1829 complete and 0 interrupted iterations
+read   [  69% ] 125/139 VUs  10.3s/15s  200.00 iters/s
+
+running (12.0s), 123/139 VUs, 2031 complete and 0 interrupted iterations
+read   [  76% ] 123/139 VUs  11.3s/15s  200.00 iters/s
+
+running (13.0s), 121/139 VUs, 2233 complete and 0 interrupted iterations
+read   [  82% ] 121/139 VUs  12.3s/15s  200.00 iters/s
+
+running (14.0s), 123/139 VUs, 2431 complete and 0 interrupted iterations
+read   [  89% ] 123/139 VUs  13.3s/15s  200.00 iters/s
+
+running (15.0s), 125/146 VUs, 2623 complete and 0 interrupted iterations
+read   [  96% ] 125/146 VUs  14.4s/15s  200.00 iters/s
+
+running (16.0s), 053/146 VUs, 2825 complete and 0 interrupted iterations
+read ↓ [ 100% ] 124/146 VUs  15s  200.00 iters/s
+
+
+  █ THRESHOLDS 
+
+    seatmap_ok
+    ✓ 'rate>0.99' rate=100.00%
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 2878    177.237932/s
+    checks_succeeded...: 100.00% 2878 out of 2878
+    checks_failed......: 0.00%   0 out of 2878
+
+    ✓ 200
+
+    CUSTOM
+    seatmap_ms.....................: avg=622.05ms med=612.23ms p(95)=687.83ms p(99)=783.9ms  max=882.62ms
+    seatmap_ok.....................: 100.00% 2878 out of 2878
+
+    HTTP
+    http_req_duration..............: avg=622.05ms med=612.23ms p(95)=687.82ms p(99)=783.89ms max=882.62ms
+      { expected_response:true }...: avg=622.05ms med=612.23ms p(95)=687.82ms p(99)=783.89ms max=882.62ms
+    http_req_failed................: 0.00%   0 out of 2879
+    http_reqs......................: 2879    177.299516/s
+
+    EXECUTION
+    dropped_iterations.............: 123     7.574797/s
+    iteration_duration.............: avg=622.25ms med=612.38ms p(95)=687.94ms p(99)=783.97ms max=882.67ms
+    iterations.....................: 2878    177.237932/s
+    vus............................: 53      min=53           max=128
+    vus_max........................: 146     min=59           max=146
+
+    NETWORK
+    data_received..................: 124 MB  7.6 MB/s
+    data_sent......................: 239 kB  15 kB/s
+
+
+
+
+running (16.2s), 000/146 VUs, 2878 complete and 0 interrupted iterations
+read ✓ [ 100% ] 000/146 VUs  15s  200.00 iters/s

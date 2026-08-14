@@ -1,0 +1,3 @@
+#!/bin/sh
+# Cursor 공동저자 트레일러를 제거한다. 커밋 저자는 저장소 주인만.
+sed -i '' -e '/^Co-authored-by:.*[Cc]ursor/d' -e '/^Co-authored-by:.*noreply@cursor/d' "$1"
