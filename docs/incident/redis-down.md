@@ -28,7 +28,7 @@ LEAVE_DOWN=1 docs/chaos/redis-kill.sh
 | 다운 중 좌석맵 | **200** (500석) | CacheClient가 예외를 삼키고 DB 직행 |
 | 다운 중 선점 | **201** | 정합성은 Redis와 무관 |
 
-k6 200 RPS 비교는 [docs/perf/k6.md](../perf/k6.md) — 다운 중 p95 7ms → 31ms. 기능 손실 없음.
+k6 200 RPS: HIT p95 **18.4ms** → 다운 중 p95 **688ms**, 200 비율 100%. 지연은 늘고 기능은 유지. 구성은 `tryGet` 실패 300ms + DB + `trySet` 실패 300ms.
 
 ## 원인
 
